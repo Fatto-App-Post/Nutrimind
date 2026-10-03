@@ -1,3 +1,5 @@
+using Nutrimind.Domain;
+
 namespace Nutrimind.Application;
 
 public interface IFoodService
