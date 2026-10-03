@@ -1,6 +1,9 @@
-using Supabase;
-using Supabase.Postgrest;
-using Supabase.Postgrest.Models;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Web;
 using Nutrimind.Domain;
 using Nutrimind.Application;
 
@@ -8,89 +11,76 @@ namespace Nutrimind.Infrastructure.Supabase;
 
 public sealed class SupabaseFoodRepository : IFoodRepository
 {
-    private readonly Client _client;
+    private readonly HttpClient _http;
+    private readonly string _baseUrl;
+    private readonly string _apiKey;
 
-    public SupabaseFoodRepository(Client client)
+    public SupabaseFoodRepository(HttpClient http, string baseUrl, string apiKey)
     {
-        _client = client;
+        _http = http;
+        _baseUrl = baseUrl.TrimEnd('/');
+        _apiKey = apiKey;
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        _http.DefaultRequestHeaders.Add("apikey", apiKey);
     }
 
     public async Task<Food?> GetByBarcodeAsync(string barcode, CancellationToken ct)
     {
-        var response = await _client
-            .From<FoodRow>()
-            .Where(r => r.barcode == barcode && r.is_active && r.verification != "rejected")
-            .Single(ct);
+        var url = $"{_baseUrl}/rest/v1/foods?barcode=eq.{barcode}&is_active=eq.true&verification=not.eq.rejected&select=*";
+        var response = await _http.GetAsync(url, ct);
+        if (!response.IsSuccessStatusCode)
+            return null;
 
-        return response?.ToDomain();
+        var foods = await response.Content.ReadFromJsonAsync<List<FoodDto>>(ct);
+        return foods?.FirstOrDefault()?.ToDomain();
     }
 
     public async Task<IReadOnlyList<Food>> SearchAsync(string query, int limit, CancellationToken ct)
     {
-        var response = await _client
-            .From<FoodRow>()
-            .Where(r => r.name_search.Contains(query.ToLower()))
-            .Limit(limit)
-            .Select(ct);
+        var encodedQuery = HttpUtility.UrlEncode($"%{query.ToLower()}%");
+        var url = $"{_baseUrl}/rest/v1/foods?name_search=ilike.{encodedQuery}&limit={limit}&select=*";
+        var response = await _http.GetAsync(url, ct);
+        if (!response.IsSuccessStatusCode)
+            return Array.Empty<Food>();
 
-        return response.Select(r => r.ToDomain()).ToList().AsReadOnly();
+        var foods = await response.Content.ReadFromJsonAsync<List<FoodDto>>(ct);
+        return foods?.Select(f => f.ToDomain()).ToList() ?? Array.Empty<Food>();
     }
 
     public async Task UpsertAsync(Food food, CancellationToken ct)
     {
-        var row = FoodRow.FromDomain(food);
-        await _client.From<FoodRow>().Upsert(row, ct);
+        var dto = FoodDto.FromDomain(food);
+        var url = $"{_baseUrl}/rest/v1/foods";
+        var content = new StringContent(
+            JsonSerializer.Serialize(dto, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }),
+            Encoding.UTF8,
+            "application/json");
+
+        content.Headers.Add("Prefer", "resolution=merge-duplicates");
+
+        var response = await _http.PostAsync(url, content, ct);
+        response.EnsureSuccessStatusCode();
     }
 }
 
-public sealed class FoodRow : BaseModel<FoodRow>
+// DTO per la serializzazione/deserializzazione
+public sealed class FoodDto
 {
-    [PrimaryKey("id")]
     public Guid id { get; set; }
-
-    [Column("name")]
     public string name { get; set; } = "";
-
-    [Column("brand")]
     public string? brand { get; set; }
-
-    [Column("barcode")]
     public string? barcode { get; set; }
-
-    [Column("source")]
     public string source { get; set; } = "user";
-
-    [Column("source_id")]
     public string? source_id { get; set; }
-
-    [Column("verification")]
     public string verification { get; set; } = "unverified";
-
-    [Column("kcal")]
     public decimal kcal { get; set; }
-
-    [Column("protein_g")]
     public decimal protein_g { get; set; }
-
-    [Column("carbs_g")]
     public decimal carbs_g { get; set; }
-
-    [Column("fat_g")]
     public decimal fat_g { get; set; }
-
-    [Column("image_front_url")]
     public string? image_front_url { get; set; }
-
-    [Column("nutriscore_grade")]
     public string? nutriscore_grade { get; set; }
-
-    [Column("ecoscore_grade")]
     public string? ecoscore_grade { get; set; }
-
-    [Column("nova_group")]
     public int? nova_group { get; set; }
-
-    [Column("is_active")]
     public bool is_active { get; set; } = true;
 
     public Food ToDomain() => new()
@@ -112,7 +102,7 @@ public sealed class FoodRow : BaseModel<FoodRow>
         NovaGroup = nova_group
     };
 
-    public static FoodRow FromDomain(Food f) => new()
+    public static FoodDto FromDomain(Food f) => new()
     {
         id = f.Id,
         name = f.Name,

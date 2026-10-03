@@ -1,8 +1,6 @@
-using Nutrimind.Domain;
 using Nutrimind.Application;
 using Nutrimind.Infrastructure.Supabase;
 using Nutrimind.Infrastructure.OpenFoodFacts;
-using Supabase;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,29 +15,19 @@ var supabaseServiceKey = builder.Configuration["Supabase:ServiceRoleKey"]
     ?? Environment.GetEnvironmentVariable("Supabase__ServiceRoleKey") 
     ?? throw new InvalidOperationException("Supabase:ServiceRoleKey not configured");
 
-var supabasePublishableKey = builder.Configuration["Supabase:PublishableKey"] 
-    ?? Environment.GetEnvironmentVariable("Supabase__PublishableKey");
-
-var supabaseJwksUrl = builder.Configuration["Supabase:JwksUrl"] 
-    ?? Environment.GetEnvironmentVariable("Supabase__JwksUrl");
-
-var options = new SupabaseOptions 
-{ 
-    AutoConnectRealtime = false,
-    AutoRefreshToken = true
-};
-
-var supabaseClient = new Client(supabaseUrl, supabaseServiceKey, options);
-
-builder.Services.AddSingleton(supabaseClient);
-builder.Services.AddSingleton<IFoodRepository, SupabaseFoodRepository>();
-
-// Log configurazione (solo in Development)
-if (builder.Environment.IsDevelopment())
+// Configura HttpClient per Supabase
+builder.Services.AddHttpClient<IFoodRepository, SupabaseFoodRepository>((sp, client) =>
 {
-    Console.WriteLine($"[DEV] Supabase URL: {supabaseUrl}");
-    Console.WriteLine($"[DEV] Supabase JWKS: {supabaseJwksUrl ?? "not configured"}");
-}
+    var repo = sp.GetRequiredService<SupabaseFoodRepository>();
+    // La configurazione avviene nel costruttore del repository
+});
+
+builder.Services.AddScoped<IFoodRepository>(sp =>
+{
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+    var client = httpClientFactory.CreateClient();
+    return new SupabaseFoodRepository(client, supabaseUrl, supabaseServiceKey);
+});
 
 // ==========================================
 // Configurazione Open Food Facts
@@ -56,12 +44,6 @@ builder.Services.AddHttpClient<IOpenFoodFactsClient, OpenFoodFactsClient>(c =>
         ?? "Nutrimind/0.1";
     c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
 });
-
-// Log configurazione OFF (solo in Development)
-if (builder.Environment.IsDevelopment())
-{
-    Console.WriteLine($"[DEV] Open Food Facts BaseUri: {offBaseUri}");
-}
 
 // ==========================================
 // Servizi Application
@@ -104,5 +86,3 @@ app.MapGet("/api/foods/barcode/{barcode}", async (
 });
 
 app.Run();
-
-public partial class Program { }

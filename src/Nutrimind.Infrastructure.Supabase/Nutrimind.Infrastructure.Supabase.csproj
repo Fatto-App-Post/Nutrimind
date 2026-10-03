@@ -8,10 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Nutrimind.Domain\Nutrimind.Domain.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Supabase" Version="0.12.0" />
+    <ProjectReference Include="..\Nutrimind.Application\Nutrimind.Application.csproj" />
   </ItemGroup>
 
 </Project>
