@@ -43,9 +43,7 @@ In breve:
 
 ## Configurazione secret (GitHub Actions)
 
-Il workflow CI usa **8 secret** da configurare nel repo:
-
-**Vai su**: https://github.com/Fatto-App-Post/Nutrimind/settings/secrets/actions
+Il workflow CI usa **8 secret** già configurati nel repo:
 
 ### Secret per DEV
 
@@ -91,7 +89,7 @@ Il progetto usa **GitHub Actions**:
 
 ## Endpoint principali
 
-- `GET /health` – health check
+- `GET /health` – health check (mostra ambiente e configurazione)
 - `GET /api/foods/search?q=...&limit=...` – ricerca alimenti
 - `GET /api/foods/barcode/{barcode}` – dettaglio alimento (fallback automatico su OFF)
 
