@@ -3,6 +3,7 @@ using Nutrimind.Domain;
 using Nutrimind.Infrastructure.Supabase;
 using OpenFoodFactsClient = Nutrimind.Infrastructure.OpenFoodFacts.OpenFoodFactsClient;
 using IOpenFoodFactsClient = Nutrimind.Infrastructure.OpenFoodFacts.IOpenFoodFactsClient;
+using Supabase;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,7 +15,14 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IFoodService, FoodService>();
 
 // Repositories
-builder.Services.AddScoped<IFoodRepository, SupabaseFoodRepository>();
+builder.Services.AddScoped<IFoodRepository, SupabaseFoodRepository>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var supabaseUrl = config["Supabase:Url"] ?? throw new InvalidOperationException("Supabase:Url missing");
+    var supabaseKey = config["Supabase:Key"] ?? throw new InvalidOperationException("Supabase:Key missing");
+    var client = new Client(supabaseUrl, supabaseKey);
+    return new SupabaseFoodRepository(client);
+});
 
 // External clients
 builder.Services.AddHttpClient<IOpenFoodFactsClient, OpenFoodFactsClient>(c =>
@@ -22,9 +30,6 @@ builder.Services.AddHttpClient<IOpenFoodFactsClient, OpenFoodFactsClient>(c =>
     c.BaseAddress = new Uri("https://world.openfoodfacts.org");
     return new OpenFoodFactsClient(c);
 });
-
-// Supabase
-builder.Services.AddSupabase(builder.Configuration);
 
 var app = builder.Build();
 
