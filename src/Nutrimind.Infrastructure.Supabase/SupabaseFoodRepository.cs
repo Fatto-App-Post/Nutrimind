@@ -16,7 +16,7 @@ public sealed class SupabaseFoodRepository : IFoodRepository
 
     public async Task<IReadOnlyList<Food>> ListAsync(int limit, CancellationToken ct = default)
     {
-        var response = await _client.From<FoodEntity>().Limit(limit).Select();
+        var response = await _client.From<FoodEntity>().Limit(limit).Get();
         return response.Models.Select(ToDomain).ToList();
     }
 
@@ -25,7 +25,7 @@ public sealed class SupabaseFoodRepository : IFoodRepository
         var response = await _client.From<FoodEntity>()
             .Where(x => x.Name.Contains(query))
             .Limit(limit)
-            .Select();
+            .Get();
         return response.Models.Select(ToDomain).ToList();
     }
 
@@ -57,8 +57,8 @@ public sealed class SupabaseFoodRepository : IFoodRepository
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await _client.From<FoodEntity>().Where(x => x.Id == id).Delete();
-        return response.Models.Any();
+        await _client.From<FoodEntity>().Where(x => x.Id == id).Delete();
+        return true;
     }
 
     private static Food ToDomain(FoodEntity e) => new()
