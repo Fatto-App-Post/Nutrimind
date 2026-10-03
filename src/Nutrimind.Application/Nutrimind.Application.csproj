@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Nutrimind.Domain\Nutrimind.Domain.csproj" />
+    <ProjectReference Include="..\Nutrimind.Infrastructure.OpenFoodFacts\Nutrimind.Infrastructure.OpenFoodFacts.csproj" />
   </ItemGroup>
 
 </Project>
