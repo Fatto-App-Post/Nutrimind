@@ -1,4 +1,5 @@
 using Supabase;
+using Supabase.Postgrest;
 using Nutrimind.Domain;
 using Nutrimind.Application;
 
@@ -18,7 +19,7 @@ public sealed class SupabaseFoodRepository : IFoodRepository
         var response = await _client
             .From<FoodRow>()
             .Where(r => r.barcode == barcode && r.is_active && r.verification != "rejected")
-            .Single(ct);
+            .Single(ct: ct);
 
         return response?.ToDomain();
     }
@@ -27,37 +28,68 @@ public sealed class SupabaseFoodRepository : IFoodRepository
     {
         var response = await _client
             .From<FoodRow>()
-            .Where(r => r.name_search.Contains(query.ToLowerInvariant()))
+            .Filter("name_search", Operator.Ilike, $"%{query}%")
             .Limit(limit)
-            .Select(ct);
+            .Get(ct);
 
-        return response.Select(r => r.ToDomain()).ToList().AsReadOnly();
+        return response.Models.Select(r => r.ToDomain()).ToList().AsReadOnly();
     }
 
     public async Task UpsertAsync(Food food, CancellationToken ct)
     {
         var row = FoodRow.FromDomain(food);
-        await _client.From<FoodRow>().Upsert(row, ct);
+        await _client.From<FoodRow>().Upsert(row, ct: ct);
     }
 }
 
-public sealed class FoodRow
+public sealed class FoodRow : BaseModel<FoodRow>
 {
+    [PrimaryKey("id")]
     public Guid id { get; set; }
+
+    [Column("name")]
     public string name { get; set; } = "";
+
+    [Column("brand")]
     public string? brand { get; set; }
+
+    [Column("barcode")]
     public string? barcode { get; set; }
+
+    [Column("source")]
     public string source { get; set; } = "user";
+
+    [Column("source_id")]
     public string? source_id { get; set; }
+
+    [Column("verification")]
     public string verification { get; set; } = "unverified";
+
+    [Column("kcal")]
     public decimal kcal { get; set; }
+
+    [Column("protein_g")]
     public decimal protein_g { get; set; }
+
+    [Column("carbs_g")]
     public decimal carbs_g { get; set; }
+
+    [Column("fat_g")]
     public decimal fat_g { get; set; }
+
+    [Column("image_front_url")]
     public string? image_front_url { get; set; }
+
+    [Column("nutriscore_grade")]
     public string? nutriscore_grade { get; set; }
+
+    [Column("ecoscore_grade")]
     public string? ecoscore_grade { get; set; }
+
+    [Column("nova_group")]
     public int? nova_group { get; set; }
+
+    [Column("is_active")]
     public bool is_active { get; set; } = true;
 
     public Food ToDomain() => new()
