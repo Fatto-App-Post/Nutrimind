@@ -1,6 +1,5 @@
 using Supabase;
 using Supabase.Postgrest;
-using Supabase.Postgrest.Models;
 using Nutrimind.Domain;
 using Nutrimind.Application;
 
@@ -45,7 +44,7 @@ public sealed class SupabaseFoodRepository : IFoodRepository
     }
 }
 
-public sealed class FoodRow : BaseModel<FoodRow>
+public sealed class FoodRow : BaseModel
 {
     [PrimaryKey("id")]
     public Guid id { get; set; }
