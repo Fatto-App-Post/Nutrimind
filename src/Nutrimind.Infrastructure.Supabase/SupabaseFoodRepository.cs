@@ -41,10 +41,10 @@ public sealed class SupabaseFoodRepository : IFoodRepository
         var url = $"{_baseUrl}/rest/v1/foods?name_search=ilike.{encodedQuery}&limit={limit}&select=*";
         var response = await _http.GetAsync(url, ct);
         if (!response.IsSuccessStatusCode)
-            return Array.Empty<Food>();
+            return new List<Food>();
 
         var foods = await response.Content.ReadFromJsonAsync<List<FoodDto>>(ct);
-        return foods?.Select(f => f.ToDomain()).ToList() ?? Array.Empty<Food>();
+        return foods?.Select(f => f.ToDomain()).ToList() ?? new List<Food>();
     }
 
     public async Task UpsertAsync(Food food, CancellationToken ct)
