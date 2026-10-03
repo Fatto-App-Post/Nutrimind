@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [develop]
 
+env:
+  # Open Food Facts URLs
+  OFF_BASE_URI_DEV: https://world.openfoodfacts.net
+  OFF_BASE_URI_PROD: https://world.openfoodfacts.org
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -34,7 +39,9 @@ jobs:
         env:
           Supabase__Url: ${{ secrets.SUPABASE_DEV_URL }}
           Supabase__ServiceRoleKey: ${{ secrets.SUPABASE_DEV_SECRET_KEY }}
-          OpenFoodFacts__BaseUri: "https://world.openfoodfacts.net"
+          Supabase__PublishableKey: ${{ secrets.SUPABASE_DEV_PUBLISHABLE_KEY }}
+          Supabase__JwksUrl: ${{ secrets.SUPABASE_DEV_JWKS_URL }}
+          OpenFoodFacts__BaseUri: ${{ env.OFF_BASE_URI_DEV }}
 
       - name: Test (PROD)
         if: matrix.environment == 'prod'
@@ -42,7 +49,9 @@ jobs:
         env:
           Supabase__Url: ${{ secrets.SUPABASE_PROD_URL }}
           Supabase__ServiceRoleKey: ${{ secrets.SUPABASE_PROD_SECRET_KEY }}
-          OpenFoodFacts__BaseUri: "https://world.openfoodfacts.org"
+          Supabase__PublishableKey: ${{ secrets.SUPABASE_PROD_PUBLISHABLE_KEY }}
+          Supabase__JwksUrl: ${{ secrets.SUPABASE_PROD_JWKS_URL }}
+          OpenFoodFacts__BaseUri: ${{ env.OFF_BASE_URI_PROD }}
 
   deploy-preview:
     needs: build-and-test
@@ -51,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Deploy preview (placeholder)
-        run: echo "Preview deployment step - to be implemented"
+        run: echo "Preview deployment - to be implemented"
 
   deploy-prod:
     needs: build-and-test
@@ -60,4 +69,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Deploy to production (placeholder)
-        run: echo "Production deployment step - to be implemented"
+        run: echo "Production deployment - to be implemented"
