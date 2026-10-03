@@ -6,6 +6,7 @@ public interface IFoodService
 {
     Task<IReadOnlyList<Food>> SearchAsync(string? query, int limit = 20, CancellationToken ct = default);
     Task<Food?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<Food?> GetByBarcodeAsync(string barcode, CancellationToken ct = default);
     Task<Food> CreateAsync(Food food, CancellationToken ct = default);
     Task<Food?> UpdateAsync(Guid id, Food food, CancellationToken ct = default);
     Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
@@ -38,6 +39,9 @@ public sealed class FoodService : IFoodService
 
     public Task<Food?> GetAsync(Guid id, CancellationToken ct = default)
         => _repo.GetByIdAsync(id, ct);
+
+    public Task<Food?> GetByBarcodeAsync(string barcode, CancellationToken ct = default)
+        => _repo.GetByBarcodeAsync(barcode, ct);
 
     public Task<Food> CreateAsync(Food food, CancellationToken ct = default)
         => _repo.CreateAsync(food, ct);
