@@ -8,16 +8,14 @@ namespace Nutrimind.Tests.Integration;
 
 public class FoodApiTests
 {
-    [Fact]
+    [Fact(Skip = "Requires Supabase configuration - run manually with secrets configured")]
     public async Task Barcode_endpoint_returns_not_found_for_unknown()
     {
         var factory = new WebApplicationFactory<Program>();
         var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/foods/barcode/0000000000000");
-        
-        // Accettiamo sia 404 (not found) che 500 (se Supabase non è configurato nei test)
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -30,7 +28,7 @@ public class FoodApiTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Fact(Skip = "Requires Supabase configuration - run manually with secrets configured")]
     public async Task Search_endpoint_returns_list()
     {
         var factory = new WebApplicationFactory<Program>();
