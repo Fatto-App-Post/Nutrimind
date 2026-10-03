@@ -1,5 +1,7 @@
 using Nutrimind.Domain;
 using Supabase;
+using Postgrest.Models;
+using Postgrest.Attributes;
 
 namespace Nutrimind.Infrastructure.Supabase;
 
@@ -98,21 +100,51 @@ public sealed class SupabaseFoodRepository : IFoodRepository
     };
 }
 
-public class FoodEntity
+[Table("foods")]
+public class FoodEntity : BaseModel
 {
+    [PrimaryKey("id", false)]
     public Guid Id { get; set; }
+
+    [Column("name")]
     public string Name { get; set; } = "";
+
+    [Column("brand")]
     public string? Brand { get; set; }
+
+    [Column("barcode")]
     public string? Barcode { get; set; }
+
+    [Column("source")]
     public string Source { get; set; } = "";
+
+    [Column("source_id")]
     public string SourceId { get; set; } = "";
+
+    [Column("verification")]
     public string Verification { get; set; } = "";
+
+    [Column("kcal")]
     public decimal Kcal { get; set; }
+
+    [Column("protein_g")]
     public decimal ProteinG { get; set; }
+
+    [Column("carbs_g")]
     public decimal CarbsG { get; set; }
+
+    [Column("fat_g")]
     public decimal FatG { get; set; }
+
+    [Column("image_front_url")]
     public string? ImageFrontUrl { get; set; }
+
+    [Column("nutriscore_grade")]
     public string? NutriscoreGrade { get; set; }
+
+    [Column("ecoscore_grade")]
     public string? EcoscoreGrade { get; set; }
+
+    [Column("nova_group")]
     public int? NovaGroup { get; set; }
 }
