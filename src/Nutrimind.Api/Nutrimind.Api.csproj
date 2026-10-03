@@ -12,4 +12,8 @@
     <ProjectReference Include="..\Nutrimind.Infrastructure.OpenFoodFacts\Nutrimind.Infrastructure.OpenFoodFacts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Nutrimind.Tests.Integration" />
+  </ItemGroup>
+
 </Project>
