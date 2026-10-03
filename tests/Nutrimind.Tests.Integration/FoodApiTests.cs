@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using FluentAssertions;
+using Xunit;
 
 namespace Nutrimind.Tests.Integration;
 

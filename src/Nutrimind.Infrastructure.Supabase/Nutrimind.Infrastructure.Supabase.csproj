@@ -11,4 +11,8 @@
     <ProjectReference Include="..\Nutrimind.Application\Nutrimind.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Supabase" Version="1.0.0" />
+  </ItemGroup>
+
 </Project>

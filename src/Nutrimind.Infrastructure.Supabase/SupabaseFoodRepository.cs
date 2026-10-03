@@ -1,5 +1,7 @@
 using Supabase;
-using Supabase.Postgrest;
+using Supabase.Postgrest.Attributes;
+using Supabase.Postgrest.Models;
+using static Supabase.Postgrest.Constants;
 using Nutrimind.Domain;
 using Nutrimind.Application;
 
@@ -19,7 +21,7 @@ public sealed class SupabaseFoodRepository : IFoodRepository
         var response = await _client
             .From<FoodRow>()
             .Where(r => r.barcode == barcode && r.is_active && r.verification != "rejected")
-            .Single(ct: ct);
+            .Single(cancellationToken: ct);
 
         return response?.ToDomain();
     }
@@ -28,9 +30,9 @@ public sealed class SupabaseFoodRepository : IFoodRepository
     {
         var response = await _client
             .From<FoodRow>()
-            .Filter("name_search", Operator.Ilike, $"%{query}%")
+            .Filter("name_search", Operator.ILike, $"%{query}%")
             .Limit(limit)
-            .Get(ct);
+            .Get(cancellationToken: ct);
 
         return response.Models.Select(r => r.ToDomain()).ToList().AsReadOnly();
     }
@@ -38,13 +40,14 @@ public sealed class SupabaseFoodRepository : IFoodRepository
     public async Task UpsertAsync(Food food, CancellationToken ct)
     {
         var row = FoodRow.FromDomain(food);
-        await _client.From<FoodRow>().Upsert(row, ct: ct);
+        await _client.From<FoodRow>().Upsert(row, cancellationToken: ct);
     }
 }
 
-public sealed class FoodRow : BaseModel<FoodRow>
+[Table("foods")]
+public sealed class FoodRow : BaseModel
 {
-    [PrimaryKey("id")]
+    [PrimaryKey("id", false)]
     public Guid id { get; set; }
 
     [Column("name")]

@@ -1,3 +1,4 @@
+using Nutrimind.Domain;
 using Nutrimind.Application;
 using Nutrimind.Infrastructure.Supabase;
 using Nutrimind.Infrastructure.OpenFoodFacts;
@@ -103,3 +104,5 @@ app.MapGet("/api/foods/barcode/{barcode}", async (
 });
 
 app.Run();
+
+public partial class Program { }

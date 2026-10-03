@@ -4,11 +4,6 @@ using Nutrimind.Domain;
 
 namespace Nutrimind.Infrastructure.OpenFoodFacts;
 
-public interface IOpenFoodFactsClient
-{
-    Task<Food?> GetProductByBarcodeAsync(string barcode, CancellationToken ct);
-}
-
 public sealed class OpenFoodFactsClient : IOpenFoodFactsClient
 {
     private readonly HttpClient _http;

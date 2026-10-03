@@ -1,3 +1,4 @@
+using Xunit;
 using FluentAssertions;
 using Nutrimind.Application;
 using Nutrimind.Domain;
