@@ -7,8 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="supabase-csharp" Version="1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Nutrimind.Domain\Nutrimind.Domain.csproj" />
-    <ProjectReference Include="..\Nutrimind.Application\Nutrimind.Application.csproj" />
   </ItemGroup>
 
 </Project>
