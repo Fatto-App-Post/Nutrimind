@@ -15,7 +15,7 @@ var supabaseServiceKey = builder.Configuration["Supabase:ServiceRoleKey"]
     ?? Environment.GetEnvironmentVariable("Supabase__ServiceRoleKey") 
     ?? throw new InvalidOperationException("Supabase:ServiceRoleKey not configured");
 
-// Configura HttpClient per Supabase
+// Configura HttpClient
 builder.Services.AddHttpClient();
 
 builder.Services.AddScoped<IFoodRepository>(sp =>
