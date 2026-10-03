@@ -1,5 +1,6 @@
 using Supabase;
 using Supabase.Postgrest;
+using Supabase.Postgrest.Models;
 using Nutrimind.Domain;
 using Nutrimind.Application;
 
@@ -7,9 +8,9 @@ namespace Nutrimind.Infrastructure.Supabase;
 
 public sealed class SupabaseFoodRepository : IFoodRepository
 {
-    private readonly Supabase.Client _client;
+    private readonly Client _client;
 
-    public SupabaseFoodRepository(Supabase.Client client)
+    public SupabaseFoodRepository(Client client)
     {
         _client = client;
     }
@@ -18,10 +19,8 @@ public sealed class SupabaseFoodRepository : IFoodRepository
     {
         var response = await _client
             .From<FoodRow>()
-            .Filter("barcode", Operator.Equals, barcode)
-            .Filter("is_active", Operator.Equals, true)
-            .Filter("verification", Operator.NotEquals, "rejected")
-            .Single(ct: ct);
+            .Where(r => r.barcode == barcode && r.is_active && r.verification != "rejected")
+            .Single(ct);
 
         return response?.ToDomain();
     }
@@ -30,21 +29,21 @@ public sealed class SupabaseFoodRepository : IFoodRepository
     {
         var response = await _client
             .From<FoodRow>()
-            .Filter("name_search", Operator.Ilike, $"%{query}%")
+            .Where(r => r.name_search.Contains(query.ToLower()))
             .Limit(limit)
-            .Get(ct: ct);
+            .Select(ct);
 
-        return response.Models.Select(r => r.ToDomain()).ToList().AsReadOnly();
+        return response.Select(r => r.ToDomain()).ToList().AsReadOnly();
     }
 
     public async Task UpsertAsync(Food food, CancellationToken ct)
     {
         var row = FoodRow.FromDomain(food);
-        await _client.From<FoodRow>().Upsert(row, ct: ct);
+        await _client.From<FoodRow>().Upsert(row, ct);
     }
 }
 
-public sealed class FoodRow : BaseModel
+public sealed class FoodRow : BaseModel<FoodRow>
 {
     [PrimaryKey("id")]
     public Guid id { get; set; }
