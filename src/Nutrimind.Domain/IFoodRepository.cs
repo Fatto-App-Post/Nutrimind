@@ -10,8 +10,3 @@ public interface IFoodRepository
     Task<Food?> UpdateAsync(Guid id, Food food, CancellationToken ct = default);
     Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
 }
-
-public interface IOpenFoodFactsClient
-{
-    Task<Food?> GetProductByBarcodeAsync(string barcode, CancellationToken ct);
-}
