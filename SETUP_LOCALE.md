@@ -24,7 +24,9 @@ git checkout develop
 3. Vai su **Settings → API**
 4. Copia:
    - **Project URL**: `https://tcszsyzpvmsifclziujc.supabase.co`
-   - **service_role key**: (la chiave segreta)
+   - **service_role key**: `sb_secret_4kZzc_2-HNU-Tthf56zhbw_nBdIAt0T`
+   - **publishable_key**: `sb_publishable_LjiP_fxK-yrZrD_8IRW9zw_Qv9Uq_cXU`
+   - **JWKS URL**: `https://tcszsyzpvmsifclziujc.supabase.co/auth/v1/.well-known/jwks.json`
 
 ### PROD
 
@@ -33,7 +35,9 @@ git checkout develop
 3. Vai su **Settings → API**
 4. Copia:
    - **Project URL**: `https://ynnlfxgehbtlneiknrfr.supabase.co`
-   - **service_role key**: (la chiave segreta)
+   - **service_role key**: `sb_secret_XT0GMUvpHmPWjgl60PLJfg_CENufVxY`
+   - **publishable_key**: `sb_publishable_Dkv2o2Sl9rkpA0ZeDRgwIA_5QALd4u3`
+   - **JWKS URL**: `https://ynnlfxgehbtlneiknrfr.supabase.co/auth/v1/.well-known/jwks.json`
 
 ## 3. Configurare l'ambiente locale
 
@@ -45,7 +49,9 @@ Per **sviluppo su DEV**:
 cd src/Nutrimind.Api
 dotnet user-secrets init
 dotnet user-secrets set "Supabase:Url" "https://tcszsyzpvmsifclziujc.supabase.co"
-dotnet user-secrets set "Supabase:ServiceRoleKey" "tua-service-role-key-dev"
+dotnet user-secrets set "Supabase:ServiceRoleKey" "sb_secret_4kZzc_2-HNU-Tthf56zhbw_nBdIAt0T"
+dotnet user-secrets set "Supabase:PublishableKey" "sb_publishable_LjiP_fxK-yrZrD_8IRW9zw_Qv9Uq_cXU"
+dotnet user-secrets set "Supabase:JwksUrl" "https://tcszsyzpvmsifclziujc.supabase.co/auth/v1/.well-known/jwks.json"
 dotnet user-secrets set "OpenFoodFacts:BaseUri" "https://world.openfoodfacts.net"
 ```
 
@@ -54,31 +60,31 @@ Per **test su PROD** (solo se necessario):
 ```bash
 cd src/Nutrimind.Api
 dotnet user-secrets set "Supabase:Url" "https://ynnlfxgehbtlneiknrfr.supabase.co"
-dotnet user-secrets set "Supabase:ServiceRoleKey" "tua-service-role-key-prod"
+dotnet user-secrets set "Supabase:ServiceRoleKey" "sb_secret_XT0GMUvpHmPWjgl60PLJfg_CENufVxY"
+dotnet user-secrets set "Supabase:PublishableKey" "sb_publishable_Dkv2o2Sl9rkpA0ZeDRgwIA_5QALd4u3"
+dotnet user-secrets set "Supabase:JwksUrl" "https://ynnlfxgehbtlneiknrfr.supabase.co/auth/v1/.well-known/jwks.json"
 dotnet user-secrets set "OpenFoodFacts:BaseUri" "https://world.openfoodfacts.org"
 ```
 
 ### Opzione B: Modificare `appsettings.Development.json`
 
-Apri `src/Nutrimind.Api/appsettings.Development.json` e sostituisci:
+Il file è già preconfigurato con le chiavi corrette. Se devi modificarlo:
 
 ```json
 {
   "Supabase": {
     "Url": "https://tcszsyzpvmsifclziujc.supabase.co",
-    "AnonKey": "tua-anon-key-dev",
-    "ServiceRoleKey": "tua-service-role-key-dev"
+    "ServiceRoleKey": "sb_secret_4kZzc_2-HNU-Tthf56zhbw_nBdIAt0T",
+    "PublishableKey": "sb_publishable_LjiP_fxK-yrZrD_8IRW9zw_Qv9Uq_cXU",
+    "JwksUrl": "https://tcszsyzpvmsifclziujc.supabase.co/auth/v1/.well-known/jwks.json"
   },
   "OpenFoodFacts": {
-    "BaseUri": "https://world.openfoodfacts.net",
-    "Username": "off",
-    "Password": "off",
-    "UserAgent": "Nutrimind/0.1-dev (tua-email@example.com)"
+    "BaseUri": "https://world.openfoodfacts.net"
   }
 }
 ```
 
-**Importante:** Non committare mai chiavi reali nel repo.
+**Importante:** Non committare mai chiavi reali nel repo se sono diverse da quelle di esempio.
 
 ## 4. Installare le dipendenze
 
@@ -117,7 +123,16 @@ cd src/Nutrimind.Api
 dotnet run
 ```
 
-L'API sarà disponibile su `http://localhost:5000` (o porta indicata).
+L'API risponderà con i dettagli della configurazione:
+
+```json
+{
+  "status": "OK",
+  "environment": "Development",
+  "supabaseUrl": "https://tcszsyzpvmsifclziujc.supabase.co",
+  "offBaseUri": "https://world.openfoodfacts.net"
+}
+```
 
 ### Ambiente PROD (per test locali)
 
@@ -158,7 +173,7 @@ Dovresti vedere almeno:
 
 ## 9. GitHub Actions e Secret
 
-Il workflow CI usa i seguenti secret (da configurare nel repo):
+Il workflow CI usa i seguenti secret (già configurati nel repo):
 
 ### Secret per DEV
 
@@ -174,39 +189,34 @@ Il workflow CI usa i seguenti secret (da configurare nel repo):
 - `SUPABASE_PROD_SECRET_KEY`
 - `SUPABASE_PROD_JWKS_URL`
 
-Per configurarli:
-
-1. Vai su **https://github.com/Fatto-App-Post/Nutrimind/settings/secrets/actions**
-2. Clicca **"New repository secret"** per ognuno.
-
 ## 10. Risoluzione problemi
 
-### Errore: "Connection refused" o timeout
+### Errore: "Supabase:Url not configured"
 
-- Verifica che l'URL di Supabase sia corretto.
-- Controlla che il firewall non blocchi le connessioni.
+- Verifica di aver impostato i secret o le variabili d'ambiente.
+- Controlla che i nomi siano esatti (case-sensitive).
 
 ### Errore: "Invalid API key"
 
-- Assicurati di usare la **service_role key** (non la publishable key).
-- Verifica che non ci siano spazi extra nel file `appsettings` o nei secret.
+- Assicurati di usare la **service_role key** corretta.
+- Verifica che non ci siano spazi extra.
 
 ### I test falliscono con "404 Not Found"
 
 - Alcuni test si aspettano che il DB sia vuoto per certi barcode.
-- Puoi resettare il DB di dev (solo se sei sicuro di non perdere dati):
+- Puoi resettare il DB di dev (solo se sei sicuro):
   ```sql
   truncate table public.foods restart identity cascade;
   ```
 
 ## 11. Push e PR
 
-Dopo aver testato in locale:
+Dopo aver testato:
 
 ```bash
 git add .
-git commit -m "feat: descrizione della modifica"
+git commit -m "feat: descrizione"
 git push origin develop
 ```
 
-Poi apri una Pull Request su GitHub da `develop` verso `main` (o verso `develop` se sei su un branch feature).
+Poi apri una PR su GitHub.
