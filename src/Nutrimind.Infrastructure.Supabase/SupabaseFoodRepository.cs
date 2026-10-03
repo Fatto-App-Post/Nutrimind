@@ -1,5 +1,6 @@
 using Supabase;
 using Supabase.Postgrest;
+using Supabase.Postgrest.Models;
 using Nutrimind.Domain;
 using Nutrimind.Application;
 
@@ -7,9 +8,9 @@ namespace Nutrimind.Infrastructure.Supabase;
 
 public sealed class SupabaseFoodRepository : IFoodRepository
 {
-    private readonly Client _client;
+    private readonly Supabase.Client _client;
 
-    public SupabaseFoodRepository(Client client)
+    public SupabaseFoodRepository(Supabase.Client client)
     {
         _client = client;
     }
