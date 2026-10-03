@@ -1,4 +1,5 @@
 using Nutrimind.Application;
+using Nutrimind.Domain;
 using Nutrimind.Infrastructure.Supabase;
 using Nutrimind.Infrastructure.OpenFoodFacts;
 
@@ -44,7 +45,7 @@ var foods = app.MapGroup("/api/foods");
 
 foods.MapGet("", async (IFoodService service, string? query, CancellationToken ct) =>
 {
-    var foods = await service.SearchFoodsAsync(query, ct);
+    var foods = await service.SearchAsync(query, ct);
     return Results.Ok(foods);
 })
 .WithName("SearchFoods")
@@ -52,7 +53,7 @@ foods.MapGet("", async (IFoodService service, string? query, CancellationToken c
 
 foods.MapGet("{id:guid}", async (IFoodService service, Guid id, CancellationToken ct) =>
 {
-    var food = await service.GetFoodByIdAsync(id, ct);
+    var food = await service.GetByIdAsync(id, ct);
     return food is not null ? Results.Ok(food) : Results.NotFound();
 })
 .WithName("GetFood")
@@ -60,7 +61,7 @@ foods.MapGet("{id:guid}", async (IFoodService service, Guid id, CancellationToke
 
 foods.MapPost("", async (IFoodService service, Food food, CancellationToken ct) =>
 {
-    var created = await service.CreateFoodAsync(food, ct);
+    var created = await service.CreateAsync(food, ct);
     return Results.Created($"/api/foods/{created.Id}", created);
 })
 .WithName("CreateFood")
@@ -68,7 +69,7 @@ foods.MapPost("", async (IFoodService service, Food food, CancellationToken ct) 
 
 foods.MapPut("{id:guid}", async (IFoodService service, Guid id, Food food, CancellationToken ct) =>
 {
-    var updated = await service.UpdateFoodAsync(id, food, ct);
+    var updated = await service.UpdateAsync(id, food, ct);
     return updated is not null ? Results.Ok(updated) : Results.NotFound();
 })
 .WithName("UpdateFood")
@@ -76,7 +77,7 @@ foods.MapPut("{id:guid}", async (IFoodService service, Guid id, Food food, Cance
 
 foods.MapDelete("{id:guid}", async (IFoodService service, Guid id, CancellationToken ct) =>
 {
-    var deleted = await service.DeleteFoodAsync(id, ct);
+    var deleted = await service.DeleteAsync(id, ct);
     return deleted ? Results.NoContent() : Results.NotFound();
 })
 .WithName("DeleteFood")
