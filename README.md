@@ -5,7 +5,9 @@ Nutrimind è un'app di food tracking macro-first con portale nutrizionista e dat
 ## Stack
 
 - **Backend**: C# .NET 8, ASP.NET Core Minimal API
-- **Database**: PostgreSQL su Supabase (progetto `Nutrimind - dev`)
+- **Database**: PostgreSQL su Supabase
+  - Sviluppo: `Nutrimind - dev`
+  - Produzione: `Nutrimind - prod`
 - **Fonte esterna**: Open Food Facts API
 - **Frontend**: Flutter (app mobile)
 
@@ -19,6 +21,25 @@ Nutrimind è un'app di food tracking macro-first con portale nutrizionista e dat
 - `tests/Nutrimind.Tests.Unit` – Test unitari
 - `tests/Nutrimind.Tests.Integration` – Test di integrazione (API, DB, OFF)
 
+## Configurazione multi-ambiente
+
+Il backend supporta due configurazioni distinte:
+
+- **Development** (`appsettings.Development.json`): punta a `Nutrimind - dev`.
+- **Production** (`appsettings.Production.json`): punta a `Nutrimind - prod`.
+
+Per usare una configurazione specifica:
+
+```bash
+# Sviluppo
+dotnet run --project src/Nutrimind.Api --environment Development
+
+# Produzione (locale, per test)
+dotnet run --project src/Nutrimind.Api --environment Production
+```
+
+In produzione reale, le chiavi Supabase vanno impostate come segreti nel servizio di hosting (es. Azure App Service, AWS ECS, ecc.).
+
 ## Documentazione
 
 - [Architettura](docs/architecture.md)
@@ -28,45 +49,25 @@ Nutrimind è un'app di food tracking macro-first con portale nutrizionista e dat
 - [Integrazione Frontend](docs/frontend-integration.md)
 - [Migrazioni SQL](migrations/)
 
-## Configurazione locale
-
-Usa .NET user-secrets o variabili ambiente:
-
-```json
-{
-  "Supabase": {
-    "Url": "https://xxxxx.supabase.co",
-    "AnonKey": "eyJ...",
-    "ServiceRoleKey": "eyJ..."
-  },
-  "OpenFoodFacts": {
-    "BaseUri": "https://world.openfoodfacts.net",
-    "Username": "off",
-    "Password": "off",
-    "UserAgent": "Nutrimind/0.1 (contact@example.com)"
-  }
-}
-```
-
 ## Branching
 
-- `main` – produzione
-- `develop` – integrazione
-- `feature/*` – funzionalità specifiche
+- `main` – produzione (punta a `Nutrimind - prod`)
+- `develop` – integrazione (punta a `Nutrimind - dev`)
+- `feature/*` – funzionalità specifiche (sviluppate su `dev`)
 
 ## Primi passi
 
 1. Clona la repository.
-2. Configura i segreti locali.
+2. Configura `appsettings.Development.json` con le chiavi di `Nutrimind - dev`.
 3. Esegui `dotnet build`.
 4. Esegui i test: `dotnet test`.
 5. Avvia l'API: `dotnet run --project src/Nutrimind.Api`.
 
-## Integrazione con Supabase
+## Endpoint principali
 
-Il database di sviluppo è il progetto Supabase **Nutrimind - dev**.
-Le migrazioni sono già state applicate manualmente tramite SQL Editor / CLI.
-Per riferimento, gli script sono in `migrations/`.
+- `GET /health` – health check
+- `GET /api/foods/search?q=...&limit=...` – ricerca alimenti
+- `GET /api/foods/barcode/{barcode}` – dettaglio alimento (con fallback automatico su OFF)
 
 ## Integrazione con Open Food Facts
 
