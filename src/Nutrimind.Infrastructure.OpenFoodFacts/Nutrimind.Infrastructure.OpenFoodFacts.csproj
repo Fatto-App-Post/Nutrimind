@@ -10,8 +10,4 @@
     <ProjectReference Include="..\Nutrimind.Domain\Nutrimind.Domain.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
-  </ItemGroup>
-
 </Project>
