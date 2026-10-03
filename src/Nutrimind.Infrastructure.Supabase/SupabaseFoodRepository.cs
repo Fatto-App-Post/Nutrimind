@@ -1,5 +1,6 @@
 using Supabase;
 using Nutrimind.Domain;
+using Nutrimind.Application;
 
 namespace Nutrimind.Infrastructure.Supabase;
 
@@ -40,7 +41,6 @@ public sealed class SupabaseFoodRepository : IFoodRepository
     }
 }
 
-// Modello interno per Supabase
 public sealed class FoodRow
 {
     public Guid id { get; set; }

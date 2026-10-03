@@ -29,7 +29,7 @@ public class FoodServiceTests
 
         result.Should().NotBeNull();
         result!.Name.Should().Be("Local Food");
-        off.CallCount.Should().Be(0); // OFF non chiamato
+        off.CallCount.Should().Be(0);
     }
 
     [Fact]
