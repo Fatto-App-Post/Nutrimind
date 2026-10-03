@@ -1,124 +1,118 @@
-using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text;
-using System.Text.Json;
-using System.Web;
 using Nutrimind.Domain;
-using Nutrimind.Application;
+using Supabase;
 
 namespace Nutrimind.Infrastructure.Supabase;
 
 public sealed class SupabaseFoodRepository : IFoodRepository
 {
-    private readonly HttpClient _http;
-    private readonly string _baseUrl;
-    private readonly string _apiKey;
+    private readonly Client _client;
 
-    public SupabaseFoodRepository(HttpClient http, string baseUrl, string apiKey)
+    public SupabaseFoodRepository(Client client)
     {
-        _http = http;
-        _baseUrl = baseUrl.TrimEnd('/');
-        _apiKey = apiKey;
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        _http.DefaultRequestHeaders.Add("apikey", apiKey);
+        _client = client;
     }
 
-    public async Task<Food?> GetByBarcodeAsync(string barcode, CancellationToken ct)
+    public async Task<IReadOnlyList<Food>> ListAsync(int limit, CancellationToken ct = default)
     {
-        var url = $"{_baseUrl}/rest/v1/foods?barcode=eq.{barcode}&is_active=eq.true&verification=not.eq.rejected&select=*";
-        var response = await _http.GetAsync(url, ct);
-        if (!response.IsSuccessStatusCode)
-            return null;
-
-        var foods = await response.Content.ReadFromJsonAsync<List<FoodDto>>(ct);
-        return foods?.FirstOrDefault()?.ToDomain();
+        var response = await _client.From<FoodEntity>().Limit(limit).Select();
+        return response.Models.Select(ToDomain).ToList();
     }
 
-    public async Task<IReadOnlyList<Food>> SearchAsync(string query, int limit, CancellationToken ct)
+    public async Task<IReadOnlyList<Food>> SearchAsync(string query, int limit, CancellationToken ct = default)
     {
-        var encodedQuery = HttpUtility.UrlEncode($"%{query.ToLower()}%");
-        var url = $"{_baseUrl}/rest/v1/foods?name_search=ilike.{encodedQuery}&limit={limit}&select=*";
-        var response = await _http.GetAsync(url, ct);
-        if (!response.IsSuccessStatusCode)
-            return new List<Food>();
-
-        var foods = await response.Content.ReadFromJsonAsync<List<FoodDto>>(ct);
-        return foods?.Select(f => f.ToDomain()).ToList() ?? new List<Food>();
+        var response = await _client.From<FoodEntity>()
+            .Where(x => x.Name.Contains(query))
+            .Limit(limit)
+            .Select();
+        return response.Models.Select(ToDomain).ToList();
     }
 
-    public async Task UpsertAsync(Food food, CancellationToken ct)
+    public async Task<Food?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var dto = FoodDto.FromDomain(food);
-        var url = $"{_baseUrl}/rest/v1/foods";
-        var content = new StringContent(
-            JsonSerializer.Serialize(dto, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }),
-            Encoding.UTF8,
-            "application/json");
-
-        content.Headers.Add("Prefer", "resolution=merge-duplicates");
-
-        var response = await _http.PostAsync(url, content, ct);
-        response.EnsureSuccessStatusCode();
+        var response = await _client.From<FoodEntity>().Where(x => x.Id == id).Single();
+        return response is null ? null : ToDomain(response);
     }
+
+    public async Task<Food?> GetByBarcodeAsync(string barcode, CancellationToken ct = default)
+    {
+        var response = await _client.From<FoodEntity>().Where(x => x.Barcode == barcode).Single();
+        return response is null ? null : ToDomain(response);
+    }
+
+    public async Task<Food> CreateAsync(Food food, CancellationToken ct = default)
+    {
+        var entity = FromDomain(food);
+        var response = await _client.From<FoodEntity>().Insert(entity);
+        return ToDomain(response.Models.First());
+    }
+
+    public async Task<Food?> UpdateAsync(Guid id, Food food, CancellationToken ct = default)
+    {
+        var entity = FromDomain(food);
+        var response = await _client.From<FoodEntity>().Where(x => x.Id == id).Update(entity);
+        return response.Models.FirstOrDefault() is { } m ? ToDomain(m) : null;
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        var response = await _client.From<FoodEntity>().Where(x => x.Id == id).Delete();
+        return response.Models.Any();
+    }
+
+    private static Food ToDomain(FoodEntity e) => new()
+    {
+        Id = e.Id,
+        Name = e.Name,
+        Brand = e.Brand,
+        Barcode = e.Barcode,
+        Source = e.Source,
+        SourceId = e.SourceId,
+        Verification = e.Verification,
+        Kcal = e.Kcal,
+        ProteinG = e.ProteinG,
+        CarbsG = e.CarbsG,
+        FatG = e.FatG,
+        ImageFrontUrl = e.ImageFrontUrl,
+        NutriscoreGrade = e.NutriscoreGrade,
+        EcoscoreGrade = e.EcoscoreGrade,
+        NovaGroup = e.NovaGroup
+    };
+
+    private static FoodEntity FromDomain(Food f) => new()
+    {
+        Id = f.Id,
+        Name = f.Name,
+        Brand = f.Brand,
+        Barcode = f.Barcode,
+        Source = f.Source,
+        SourceId = f.SourceId,
+        Verification = f.Verification,
+        Kcal = f.Kcal,
+        ProteinG = f.ProteinG,
+        CarbsG = f.CarbsG,
+        FatG = f.FatG,
+        ImageFrontUrl = f.ImageFrontUrl,
+        NutriscoreGrade = f.NutriscoreGrade,
+        EcoscoreGrade = f.EcoscoreGrade,
+        NovaGroup = f.NovaGroup
+    };
 }
 
-// DTO per la serializzazione/deserializzazione
-public sealed class FoodDto
+public class FoodEntity
 {
-    public Guid id { get; set; }
-    public string name { get; set; } = "";
-    public string? brand { get; set; }
-    public string? barcode { get; set; }
-    public string source { get; set; } = "user";
-    public string? source_id { get; set; }
-    public string verification { get; set; } = "unverified";
-    public decimal kcal { get; set; }
-    public decimal protein_g { get; set; }
-    public decimal carbs_g { get; set; }
-    public decimal fat_g { get; set; }
-    public string? image_front_url { get; set; }
-    public string? nutriscore_grade { get; set; }
-    public string? ecoscore_grade { get; set; }
-    public int? nova_group { get; set; }
-    public bool is_active { get; set; } = true;
-
-    public Food ToDomain() => new()
-    {
-        Id = id,
-        Name = name,
-        Brand = brand,
-        Barcode = barcode,
-        Source = source,
-        SourceId = source_id,
-        Verification = verification,
-        Kcal = kcal,
-        ProteinG = protein_g,
-        CarbsG = carbs_g,
-        FatG = fat_g,
-        ImageFrontUrl = image_front_url,
-        NutriscoreGrade = nutriscore_grade,
-        EcoscoreGrade = ecoscore_grade,
-        NovaGroup = nova_group
-    };
-
-    public static FoodDto FromDomain(Food f) => new()
-    {
-        id = f.Id,
-        name = f.Name,
-        brand = f.Brand,
-        barcode = f.Barcode,
-        source = f.Source,
-        source_id = f.SourceId,
-        verification = f.Verification,
-        kcal = f.Kcal,
-        protein_g = f.ProteinG,
-        carbs_g = f.CarbsG,
-        fat_g = f.FatG,
-        image_front_url = f.ImageFrontUrl,
-        nutriscore_grade = f.NutriscoreGrade,
-        ecoscore_grade = f.EcoscoreGrade,
-        nova_group = f.NovaGroup,
-        is_active = true
-    };
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string? Brand { get; set; }
+    public string? Barcode { get; set; }
+    public string Source { get; set; } = "";
+    public string SourceId { get; set; } = "";
+    public string Verification { get; set; } = "";
+    public decimal Kcal { get; set; }
+    public decimal ProteinG { get; set; }
+    public decimal CarbsG { get; set; }
+    public decimal FatG { get; set; }
+    public string? ImageFrontUrl { get; set; }
+    public string? NutriscoreGrade { get; set; }
+    public string? EcoscoreGrade { get; set; }
+    public int? NovaGroup { get; set; }
 }
