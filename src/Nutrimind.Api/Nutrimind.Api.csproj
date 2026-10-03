@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nutrimind.Application\Nutrimind.Application.csproj" />
+    <ProjectReference Include="..\Nutrimind.Infrastructure.Supabase\Nutrimind.Infrastructure.Supabase.csproj" />
+    <ProjectReference Include="..\Nutrimind.Infrastructure.OpenFoodFacts\Nutrimind.Infrastructure.OpenFoodFacts.csproj" />
+  </ItemGroup>
+
+</Project>
