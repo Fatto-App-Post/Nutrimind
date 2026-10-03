@@ -68,20 +68,21 @@ foods.MapGet("{id:guid}", async (IFoodService service, Guid id, CancellationToke
 
 foods.MapGet("barcode/{barcode}", async (IFoodService service, string barcode, CancellationToken ct) =>
 {
-    var food = await service.GetByBarcodeAsync(barcode, ct);
-    if (food is not null)
-        return Results.Ok(food);
-    
-    // Fallback a OpenFoodFacts se non trovato nel DB
-    if (service is FoodService fs)
+    try
     {
-        // Accesso al client OpenFoodFacts tramite reflection o esposizione diretta
-        // Per ora usiamo SearchAsync che già fa il fallback
+        var food = await service.GetByBarcodeAsync(barcode, ct);
+        if (food is not null)
+            return Results.Ok(food);
+        
+        // Fallback a OpenFoodFacts se non trovato nel DB
         var results = await service.SearchAsync(barcode, 1, ct);
         return results.FirstOrDefault() is { } f ? Results.Ok(f) : Results.NotFound();
     }
-    
-    return Results.NotFound();
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Error fetching food by barcode {Barcode}", barcode);
+        return Results.Problem("Internal server error");
+    }
 })
 .WithName("GetFoodByBarcode")
 .WithOpenApi();
