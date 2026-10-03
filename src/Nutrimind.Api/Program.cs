@@ -1,7 +1,8 @@
 using Nutrimind.Application;
 using Nutrimind.Domain;
 using Nutrimind.Infrastructure.Supabase;
-using Nutrimind.Infrastructure.OpenFoodFacts;
+using OpenFoodFactsClient = Nutrimind.Infrastructure.OpenFoodFacts.OpenFoodFactsClient;
+using IOpenFoodFactsClient = Nutrimind.Infrastructure.OpenFoodFacts.IOpenFoodFactsClient;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +20,7 @@ builder.Services.AddScoped<IFoodRepository, SupabaseFoodRepository>();
 builder.Services.AddHttpClient<IOpenFoodFactsClient, OpenFoodFactsClient>(c =>
 {
     c.BaseAddress = new Uri("https://world.openfoodfacts.org");
+    return new OpenFoodFactsClient(c);
 });
 
 // Supabase
@@ -45,7 +47,7 @@ var foods = app.MapGroup("/api/foods");
 
 foods.MapGet("", async (IFoodService service, string? query, CancellationToken ct) =>
 {
-    var foods = await service.SearchAsync(query, ct);
+    var foods = await service.SearchAsync(query, 20, ct);
     return Results.Ok(foods);
 })
 .WithName("SearchFoods")
@@ -53,7 +55,7 @@ foods.MapGet("", async (IFoodService service, string? query, CancellationToken c
 
 foods.MapGet("{id:guid}", async (IFoodService service, Guid id, CancellationToken ct) =>
 {
-    var food = await service.GetByIdAsync(id, ct);
+    var food = await service.GetAsync(id, ct);
     return food is not null ? Results.Ok(food) : Results.NotFound();
 })
 .WithName("GetFood")
