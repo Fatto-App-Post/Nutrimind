@@ -1,0 +1,35 @@
+# ==========================================
+# Git ignore per Nutrimind
+# ==========================================
+
+# User secrets e configurazioni locali
+appsettings.local.json
+.env.local
+*.user
+*.useros
+*.suo
+
+# Build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Test results
+TestResults/
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
