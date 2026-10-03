@@ -9,6 +9,10 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, prod]
+      fail-fast: false
 
     steps:
       - uses: actions/checkout@v4
@@ -24,9 +28,36 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
+      - name: Test (DEV)
+        if: matrix.environment == 'dev'
         run: dotnet test --no-build --verbosity normal --configuration Release
         env:
           Supabase__Url: ${{ secrets.SUPABASE_DEV_URL }}
-          Supabase__ServiceRoleKey: ${{ secrets.SUPABASE_DEV_SERVICE_KEY }}
+          Supabase__ServiceRoleKey: ${{ secrets.SUPABASE_DEV_SECRET_KEY }}
           OpenFoodFacts__BaseUri: "https://world.openfoodfacts.net"
+
+      - name: Test (PROD)
+        if: matrix.environment == 'prod'
+        run: dotnet test --no-build --verbosity normal --configuration Release
+        env:
+          Supabase__Url: ${{ secrets.SUPABASE_PROD_URL }}
+          Supabase__ServiceRoleKey: ${{ secrets.SUPABASE_PROD_SECRET_KEY }}
+          OpenFoodFacts__BaseUri: "https://world.openfoodfacts.org"
+
+  deploy-preview:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy preview (placeholder)
+        run: echo "Preview deployment step - to be implemented"
+
+  deploy-prod:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production (placeholder)
+        run: echo "Production deployment step - to be implemented"
