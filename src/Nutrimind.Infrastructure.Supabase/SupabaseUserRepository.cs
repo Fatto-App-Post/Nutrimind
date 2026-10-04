@@ -2,7 +2,6 @@ using Nutrimind.Domain;
 using Supabase;
 using Postgrest.Models;
 using Postgrest.Attributes;
-using Postgrest.Responses;
 
 namespace Nutrimind.Infrastructure.Supabase;
 
@@ -20,9 +19,13 @@ public sealed class SupabaseUserRepository : IUserRepository
         var response = await _client.From<ProfileEntity>().Where(x => x.Id == id).Single();
         if (response is null) return null;
         
+        // L'email va recuperata da auth.users - per ora uso un placeholder
+        // In produzione si usa l'admin API di Supabase o una RPC
+        var email = await GetUserEmailAsync(id);
+        
         return new User(
             response.Id,
-            response.Email ?? "",
+            email ?? "",
             response.DisplayName,
             (UserRole)Enum.Parse(typeof(UserRole), response.Role, true),
             response.Locale,
@@ -33,23 +36,17 @@ public sealed class SupabaseUserRepository : IUserRepository
 
     public async Task<User?> GetByEmailAsync(string email, CancellationToken ct = default)
     {
-        var response = await _client.From<ProfileEntity>().Where(x => x.Email == email).Single();
-        if (response is null) return null;
+        // Recupera user_id da auth.users tramite RPC o admin API
+        var userId = await GetUserIdByEmailAsync(email);
+        if (userId is null) return null;
         
-        return new User(
-            response.Id,
-            response.Email ?? "",
-            response.DisplayName,
-            (UserRole)Enum.Parse(typeof(UserRole), response.Role, true),
-            response.Locale,
-            response.ProfessionalVerified,
-            response.CreatedAt
-        );
+        return await GetByIdAsync(userId.Value, ct);
     }
 
     public Task<User> CreateAsync(User user, string password, CancellationToken ct = default)
     {
-        throw new NotImplementedException("User creation must be done via Supabase Auth API");
+        // La creazione va fatta tramite Supabase Auth Admin API
+        throw new NotImplementedException("User creation must be done via Supabase Auth Admin API");
     }
 
     public async Task<User> UpdateAsync(Guid id, User user, CancellationToken ct = default)
@@ -64,9 +61,11 @@ public sealed class SupabaseUserRepository : IUserRepository
         var response = await _client.From<ProfileEntity>().Where(x => x.Id == id).Update(entity);
         var model = response.Models.First();
         
+        var email = await GetUserEmailAsync(id);
+        
         return new User(
             model.Id,
-            model.Email ?? "",
+            email ?? "",
             model.DisplayName,
             (UserRole)Enum.Parse(typeof(UserRole), model.Role, true),
             model.Locale,
@@ -244,6 +243,21 @@ public sealed class SupabaseUserRepository : IUserRepository
         });
         return true;
     }
+
+    // Helper methods per recuperare l'email da auth.users
+    private async Task<string?> GetUserEmailAsync(Guid userId)
+    {
+        // Nota: In produzione serve una RPC security definer o Admin API
+        // Per ora ritorno null - il frontend dovrà gestire l'email separatamente
+        return null;
+    }
+
+    private async Task<Guid?> GetUserIdByEmailAsync(string email)
+    {
+        // Nota: In produzione serve una RPC security definer o Admin API
+        // Per ora ritorno null
+        return null;
+    }
 }
 
 [Table("profiles")]
@@ -251,9 +265,6 @@ public class ProfileEntity : BaseModel
 {
     [PrimaryKey("id", false)]
     public Guid Id { get; set; }
-
-    [Column("email")]
-    public string? Email { get; set; }
 
     [Column("role")]
     public string Role { get; set; } = "patient";
@@ -269,6 +280,9 @@ public class ProfileEntity : BaseModel
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }
+
+    [Column("updated_at")]
+    public DateTime UpdatedAt { get; set; }
 }
 
 [Table("patient_settings")]
