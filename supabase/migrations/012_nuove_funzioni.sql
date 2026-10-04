@@ -271,7 +271,7 @@ as $$
           'carbs_g', de.carbs_g,
           'fat_g', de.fat_g
         )
-        order by de.logged_at
+        order by de.created_at
       ) as entries
     from public.diary_entries de
     left join public.foods f on f.id = de.food_id
