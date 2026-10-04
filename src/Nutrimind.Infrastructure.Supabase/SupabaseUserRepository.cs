@@ -2,32 +2,9 @@ using Nutrimind.Domain;
 using Supabase;
 using Postgrest.Models;
 using Postgrest.Attributes;
+using Postgrest.Responses;
 
 namespace Nutrimind.Infrastructure.Supabase;
-
-public interface IUserRepository
-{
-    Task<User?> GetByIdAsync(Guid id, CancellationToken ct = default);
-    Task<User?> GetByEmailAsync(string email, CancellationToken ct = default);
-    Task<User> CreateAsync(User user, string password, CancellationToken ct = default);
-    Task<User> UpdateAsync(Guid id, User user, CancellationToken ct = default);
-    Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
-    
-    Task<PatientSettings?> GetPatientSettingsAsync(Guid userId, CancellationToken ct = default);
-    Task<PatientSettings> UpsertPatientSettingsAsync(PatientSettings settings, CancellationToken ct = default);
-    
-    Task<NutritionistDetails?> GetNutritionistDetailsAsync(Guid userId, CancellationToken ct = default);
-    Task<NutritionistDetails> UpsertNutritionistDetailsAsync(NutritionistDetails details, CancellationToken ct = default);
-    
-    Task<ProfessionalVerification?> GetVerificationAsync(Guid userId, CancellationToken ct = default);
-    Task<ProfessionalVerification> RequestVerificationAsync(ProfessionalVerification verification, CancellationToken ct = default);
-    
-    Task<string> CreateInvitationAsync(Guid nutritionistId, CancellationToken ct = default);
-    Task<Guid?> RedeemInvitationAsync(string code, Guid patientId, ConsentScope[] scopes, string policyVersion, CancellationToken ct = default);
-    Task<bool> RevokeLinkAsync(Guid linkId, Guid userId, CancellationToken ct = default);
-    Task<bool> GrantConsentAsync(Guid linkId, Guid patientId, ConsentScope scope, string policyVersion, CancellationToken ct = default);
-    Task<bool> RevokeConsentAsync(Guid linkId, Guid patientId, ConsentScope scope, CancellationToken ct = default);
-}
 
 public sealed class SupabaseUserRepository : IUserRepository
 {
@@ -40,10 +17,7 @@ public sealed class SupabaseUserRepository : IUserRepository
 
     public async Task<User?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await _client.From<ProfileEntity>()
-            .Where(x => x.Id == id)
-            .Single(ct);
-        
+        var response = await _client.From<ProfileEntity>().Where(x => x.Id == id).Single();
         if (response is null) return null;
         
         return new User(
@@ -59,10 +33,7 @@ public sealed class SupabaseUserRepository : IUserRepository
 
     public async Task<User?> GetByEmailAsync(string email, CancellationToken ct = default)
     {
-        var response = await _client.From<ProfileEntity>()
-            .Where(x => x.Email == email)
-            .Single(ct);
-        
+        var response = await _client.From<ProfileEntity>().Where(x => x.Email == email).Single();
         if (response is null) return null;
         
         return new User(
@@ -76,7 +47,7 @@ public sealed class SupabaseUserRepository : IUserRepository
         );
     }
 
-    public async Task<User> CreateAsync(User user, string password, CancellationToken ct = default)
+    public Task<User> CreateAsync(User user, string password, CancellationToken ct = default)
     {
         throw new NotImplementedException("User creation must be done via Supabase Auth API");
     }
@@ -90,35 +61,29 @@ public sealed class SupabaseUserRepository : IUserRepository
             Locale = user.Locale
         };
         
-        var response = await _client.From<ProfileEntity>()
-            .Where(x => x.Id == id)
-            .Update(entity, ct);
+        var response = await _client.From<ProfileEntity>().Where(x => x.Id == id).Update(entity);
+        var model = response.Models.First();
         
         return new User(
-            response.Models.First().Id,
-            response.Models.First().Email ?? "",
-            response.Models.First().DisplayName,
-            (UserRole)Enum.Parse(typeof(UserRole), response.Models.First().Role, true),
-            response.Models.First().Locale,
-            response.Models.First().ProfessionalVerified,
-            response.Models.First().CreatedAt
+            model.Id,
+            model.Email ?? "",
+            model.DisplayName,
+            (UserRole)Enum.Parse(typeof(UserRole), model.Role, true),
+            model.Locale,
+            model.ProfessionalVerified,
+            model.CreatedAt
         );
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        await _client.From<ProfileEntity>()
-            .Where(x => x.Id == id)
-            .Delete(ct);
+        await _client.From<ProfileEntity>().Where(x => x.Id == id).Delete();
         return true;
     }
 
     public async Task<PatientSettings?> GetPatientSettingsAsync(Guid userId, CancellationToken ct = default)
     {
-        var response = await _client.From<PatientSettingsEntity>()
-            .Where(x => x.UserId == userId)
-            .Single(ct);
-        
+        var response = await _client.From<PatientSettingsEntity>().Where(x => x.UserId == userId).Single();
         if (response is null) return null;
         
         return new PatientSettings(
@@ -142,11 +107,9 @@ public sealed class SupabaseUserRepository : IUserRepository
             ReminderAfterHours = (short)settings.ReminderAfterHours
         };
         
-        var response = await _client.From<PatientSettingsEntity>()
-            .Where(x => x.UserId == settings.UserId)
-            .Upsert(entity, ct);
-        
+        var response = await _client.From<PatientSettingsEntity>().Where(x => x.UserId == settings.UserId).Upsert(entity);
         var model = response.Models.First();
+        
         return new PatientSettings(
             model.UserId,
             model.DietaryRestrictions?.ToList() ?? new List<string>(),
@@ -159,10 +122,7 @@ public sealed class SupabaseUserRepository : IUserRepository
 
     public async Task<NutritionistDetails?> GetNutritionistDetailsAsync(Guid userId, CancellationToken ct = default)
     {
-        var response = await _client.From<NutritionistDetailsEntity>()
-            .Where(x => x.UserId == userId)
-            .Single(ct);
-        
+        var response = await _client.From<NutritionistDetailsEntity>().Where(x => x.UserId == userId).Single();
         if (response is null) return null;
         
         return new NutritionistDetails(
@@ -182,11 +142,9 @@ public sealed class SupabaseUserRepository : IUserRepository
             Bio = details.Bio
         };
         
-        var response = await _client.From<NutritionistDetailsEntity>()
-            .Where(x => x.UserId == details.UserId)
-            .Upsert(entity, ct);
-        
+        var response = await _client.From<NutritionistDetailsEntity>().Where(x => x.UserId == details.UserId).Upsert(entity);
         var model = response.Models.First();
+        
         return new NutritionistDetails(
             model.UserId,
             model.StudioName,
@@ -199,9 +157,8 @@ public sealed class SupabaseUserRepository : IUserRepository
     {
         var response = await _client.From<ProfessionalVerificationEntity>()
             .Where(x => x.UserId == userId)
-            .Order(x => x.CreatedAt, Ordering.Descending)
             .Limit(1)
-            .Get(ct);
+            .Get();
         
         var model = response.Models.FirstOrDefault();
         if (model is null) return null;
@@ -228,10 +185,9 @@ public sealed class SupabaseUserRepository : IUserRepository
             Status = "pending"
         };
         
-        var response = await _client.From<ProfessionalVerificationEntity>()
-            .Insert(entity, ct);
-        
+        var response = await _client.From<ProfessionalVerificationEntity>().Insert(new[] { entity });
         var model = response.Models.First();
+        
         return new ProfessionalVerification(
             model.Id,
             model.UserId,
@@ -264,10 +220,7 @@ public sealed class SupabaseUserRepository : IUserRepository
 
     public async Task<bool> RevokeLinkAsync(Guid linkId, Guid userId, CancellationToken ct = default)
     {
-        await _client.Rpc("revoke_link", new Dictionary<string, object>
-        {
-            ["p_link_id"] = linkId
-        });
+        await _client.Rpc("revoke_link", new Dictionary<string, object> { ["p_link_id"] = linkId });
         return true;
     }
 
