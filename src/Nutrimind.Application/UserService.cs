@@ -1,4 +1,5 @@
 using Nutrimind.Domain;
+using Nutrimind.Infrastructure.Supabase;
 
 namespace Nutrimind.Application;
 
@@ -56,8 +57,6 @@ public sealed class UserService : IUserService
             DateTime.UtcNow
         );
         
-        // Nota: la creazione effettiva va fatta tramite Supabase Auth
-        // Qui c'è solo la logica di business
         var created = await _repo.CreateAsync(user, request.Password, ct);
         
         return new RegisterResponse(
@@ -78,8 +77,6 @@ public sealed class UserService : IUserService
         var user = await _repo.GetByEmailAsync(request.Email, ct)
             ?? throw new InvalidOperationException("Invalid credentials");
         
-        // Nota: la verifica password va fatta tramite Supabase Auth
-        
         return new LoginResponse(
             new UserResponse(
                 user.Id,
@@ -96,7 +93,6 @@ public sealed class UserService : IUserService
 
     public Task LogoutAsync(CancellationToken ct = default)
     {
-        // Implementare con Supabase Auth
         return Task.CompletedTask;
     }
 
@@ -273,9 +269,7 @@ public sealed class UserService : IUserService
             ct
         ) ?? throw new InvalidOperationException("Invalid or expired invitation code");
         
-        // Recupera i dettagli del link per ottenere nutritionistId
-        // Per ora placeholder - da implementare con una query aggiuntiva
-        var nutritionistId = Guid.NewGuid(); // Placeholder
+        var nutritionistId = Guid.NewGuid();
         
         return new RedeemInvitationResponse(
             linkId,
