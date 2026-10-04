@@ -1,5 +1,4 @@
 using Nutrimind.Domain;
-using Nutrimind.Infrastructure.Supabase;
 
 namespace Nutrimind.Application;
 
