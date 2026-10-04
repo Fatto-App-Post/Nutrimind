@@ -1,4 +1,7 @@
 using Nutrimind.Domain;
+using Supabase;
+using Postgrest.Models;
+using Postgrest.Attributes;
 
 namespace Nutrimind.Infrastructure.Supabase;
 
@@ -75,8 +78,6 @@ public sealed class SupabaseUserRepository : IUserRepository
 
     public async Task<User> CreateAsync(User user, string password, CancellationToken ct = default)
     {
-        // Nota: la creazione utente va fatta tramite Supabase Auth API
-        // Questo metodo è un placeholder per la logica di business
         throw new NotImplementedException("User creation must be done via Supabase Auth API");
     }
 
@@ -245,14 +246,12 @@ public sealed class SupabaseUserRepository : IUserRepository
 
     public async Task<string> CreateInvitationAsync(Guid nutritionistId, CancellationToken ct = default)
     {
-        // Chiama la RPC di Supabase
         var response = await _client.Rpc("create_invitation", new Dictionary<string, object>());
         return response?.ToString() ?? throw new InvalidOperationException("Failed to create invitation");
     }
 
     public async Task<Guid?> RedeemInvitationAsync(string code, Guid patientId, ConsentScope[] scopes, string policyVersion, CancellationToken ct = default)
     {
-        // Chiama la RPC di Supabase
         var result = await _client.Rpc("redeem_invitation", new Dictionary<string, object>
         {
             ["p_code"] = code,
