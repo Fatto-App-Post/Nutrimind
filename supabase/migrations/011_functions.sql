@@ -1,6 +1,7 @@
 -- =====================================================================
 -- NutriMind — 011 FUNZIONI PER IL FRONTEND
 -- Tutte le funzioni RPC che il frontend può chiamare direttamente
+-- ADATTATE ALLA STRUTTURA REALE DEL DATABASE
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -16,13 +17,14 @@ security definer
 set search_path = ''
 as $$
 begin
-  -- Cerca nel DB locale
+  -- Cerca nel DB locale usando name_search per la ricerca full-text
   return query
   select f.*
   from foods f
   where f.is_active = true
     and (
-      f.name ilike '%' || p_query || '%'
+      f.name_search ilike '%' || p_query || '%'
+      or f.name ilike '%' || p_query || '%'
       or f.brand ilike '%' || p_query || '%'
       or f.barcode = p_query
     )
@@ -30,7 +32,7 @@ begin
   limit p_limit;
   
   -- Se non trovato e sembra un barcode, chiama OFF
-  if not found and p_query ~ '^[0-9]{8,13}$' then
+  if not found and p_query ~ '^[0-9]{8,14}$' then
     return query
     select f.*
     from openfoodfacts_search_and_cache(p_query) f;
@@ -84,14 +86,16 @@ create or replace function public.create_food(
   p_name text,
   p_brand text default null,
   p_barcode text default null,
-  p_kcal numeric default 0,
-  p_protein_g numeric default 0,
-  p_carbs_g numeric default 0,
-  p_fat_g numeric default 0,
-  p_image_front_url text default null,
-  p_nutriscore_grade text default null,
-  p_ecoscore_grade text default null,
-  p_nova_group int default null
+  p_kcal numeric,
+  p_protein_g numeric,
+  p_carbs_g numeric,
+  p_fat_g numeric,
+  p_fiber_g numeric default null,
+  p_sugars_g numeric default null,
+  p_saturated_fat_g numeric default null,
+  p_salt_g numeric default null,
+  p_serving_g numeric default null,
+  p_serving_label text default null
 )
 returns uuid
 language plpgsql
@@ -118,11 +122,11 @@ begin
   
   -- Crea alimento
   insert into foods (
-    id, name, brand, barcode, source, source_id,
+    name, brand, barcode, source, source_id,
     verification, kcal, protein_g, carbs_g, fat_g,
-    image_front_url, nutriscore_grade, ecoscore_grade, nova_group, is_active
+    fiber_g, sugars_g, saturated_fat_g, salt_g, serving_g, serving_label,
+    is_active
   ) values (
-    gen_random_uuid(),
     p_name,
     p_brand,
     p_barcode,
@@ -133,10 +137,12 @@ begin
     p_protein_g,
     p_carbs_g,
     p_fat_g,
-    p_image_front_url,
-    p_nutriscore_grade,
-    p_ecoscore_grade,
-    p_nova_group,
+    p_fiber_g,
+    p_sugars_g,
+    p_saturated_fat_g,
+    p_salt_g,
+    p_serving_g,
+    p_serving_label,
     true
   )
   returning id into v_food_id;
@@ -156,10 +162,12 @@ create or replace function public.update_food(
   p_protein_g numeric default null,
   p_carbs_g numeric default null,
   p_fat_g numeric default null,
-  p_image_front_url text default null,
-  p_nutriscore_grade text default null,
-  p_ecoscore_grade text default null,
-  p_nova_group int default null
+  p_fiber_g numeric default null,
+  p_sugars_g numeric default null,
+  p_saturated_fat_g numeric default null,
+  p_salt_g numeric default null,
+  p_serving_g numeric default null,
+  p_serving_label text default null
 )
 returns void
 language plpgsql
@@ -187,10 +195,12 @@ begin
     protein_g = coalesce(p_protein_g, protein_g),
     carbs_g = coalesce(p_carbs_g, carbs_g),
     fat_g = coalesce(p_fat_g, fat_g),
-    image_front_url = coalesce(p_image_front_url, image_front_url),
-    nutriscore_grade = coalesce(p_nutriscore_grade, nutriscore_grade),
-    ecoscore_grade = coalesce(p_ecoscore_grade, ecoscore_grade),
-    nova_group = coalesce(p_nova_group, nova_group),
+    fiber_g = coalesce(p_fiber_g, fiber_g),
+    sugars_g = coalesce(p_sugars_g, sugars_g),
+    saturated_fat_g = coalesce(p_saturated_fat_g, saturated_fat_g),
+    salt_g = coalesce(p_salt_g, salt_g),
+    serving_g = coalesce(p_serving_g, serving_g),
+    serving_label = coalesce(p_serving_label, serving_label),
     updated_at = now()
   where id = p_id;
 end;
