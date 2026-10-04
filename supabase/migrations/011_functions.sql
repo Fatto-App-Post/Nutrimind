@@ -1,7 +1,6 @@
 -- =====================================================================
 -- NutriMind — 011 FUNZIONI PER IL FRONTEND
 -- Tutte le funzioni RPC che il frontend può chiamare direttamente
--- ADATTATE ALLA STRUTTURA REALE DEL DATABASE
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -17,7 +16,6 @@ security definer
 set search_path = 'public'
 as $$
 begin
-  -- Cerca nel DB locale usando name_search per la ricerca full-text
   return query
   select f.*
   from public.foods f
@@ -31,7 +29,6 @@ begin
   order by f.trust_level desc, f.name
   limit p_limit;
   
-  -- Se non trovato e sembra un barcode, chiama OFF
   if not found and p_query ~ '^[0-9]{8,14}$' then
     return query
     select f.*
@@ -64,13 +61,11 @@ security definer
 set search_path = 'public'
 as $$
 begin
-  -- Cerca nel DB locale
   return query
   select f.*
   from public.foods f
   where f.barcode = p_barcode and f.is_active = true;
   
-  -- Se non trovato, cerca su OFF
   if not found then
     return query
     select f.*
@@ -81,15 +76,16 @@ $$;
 
 -- ---------------------------------------------------------------------
 -- CREA ALIMENTO (solo nutrizionisti verificati o admin)
+-- Tutti i parametri senza default devono venire PRIMA
 -- ---------------------------------------------------------------------
 create or replace function public.create_food(
   p_name text,
-  p_brand text default null,
-  p_barcode text default null,
   p_kcal numeric,
   p_protein_g numeric,
   p_carbs_g numeric,
   p_fat_g numeric,
+  p_brand text default null,
+  p_barcode text default null,
   p_fiber_g numeric default null,
   p_sugars_g numeric default null,
   p_saturated_fat_g numeric default null,
@@ -107,7 +103,6 @@ declare
   v_user_id uuid := auth.uid();
   v_role public.user_role;
 begin
-  -- Verifica permessi
   select role into v_role from public.profiles where id = v_user_id;
   
   if v_role not in ('nutritionist', 'admin') then
@@ -120,30 +115,19 @@ begin
     raise exception 'nutritionist_not_verified' using errcode = '42501';
   end if;
   
-  -- Crea alimento
   insert into public.foods (
     name, brand, barcode, source, source_id,
     verification, kcal, protein_g, carbs_g, fat_g,
     fiber_g, sugars_g, saturated_fat_g, salt_g, serving_g, serving_label,
     is_active
   ) values (
-    p_name,
-    p_brand,
-    p_barcode,
+    p_name, p_brand, p_barcode,
     case when v_role = 'admin' then 'crea' else 'professional' end,
     coalesce(p_barcode, ''),
     case when v_role = 'admin' then 'verified' else 'unverified' end,
-    p_kcal,
-    p_protein_g,
-    p_carbs_g,
-    p_fat_g,
-    p_fiber_g,
-    p_sugars_g,
-    p_saturated_fat_g,
-    p_salt_g,
-    p_serving_g,
-    p_serving_label,
-    true
+    p_kcal, p_protein_g, p_carbs_g, p_fat_g,
+    p_fiber_g, p_sugars_g, p_saturated_fat_g, p_salt_g,
+    p_serving_g, p_serving_label, true
   )
   returning id into v_food_id;
   
@@ -179,7 +163,6 @@ declare
   v_role public.user_role;
   v_created_by uuid;
 begin
-  -- Verifica permessi
   select role into v_role from public.profiles where id = v_user_id;
   select created_by into v_created_by from public.foods where id = p_id;
   
@@ -235,13 +218,14 @@ $$;
 
 -- ---------------------------------------------------------------------
 -- DIARIO: REGISTRA PASTO
+-- p_food_id e p_custom_name hanno default, p_grams DEVE avere default
 -- ---------------------------------------------------------------------
 create or replace function public.log_meal(
   p_entry_date date,
   p_meal_slot public.meal_slot,
+  p_grams numeric default 100,
   p_food_id uuid default null,
-  p_custom_name text default null,
-  p_grams numeric
+  p_custom_name text default null
 )
 returns uuid
 language plpgsql
@@ -253,26 +237,19 @@ declare
   v_user_id uuid := auth.uid();
   v_food_record public.foods;
 begin
-  -- Se food_id fornito, recupera i valori nutrizionali
   if p_food_id is not null then
     select * into v_food_record from public.foods where id = p_food_id;
-    
     if not found then
       raise exception 'food_not_found' using errcode = 'P0002';
     end if;
   end if;
   
-  -- Inserisci voce diario
   insert into public.diary_entries (
     patient_id, entry_date, meal_slot, food_id, custom_name,
     grams, kcal, protein_g, carbs_g, fat_g,
     food_trust_level, entry_source
   ) values (
-    v_user_id,
-    p_entry_date,
-    p_meal_slot,
-    p_food_id,
-    p_custom_name,
+    v_user_id, p_entry_date, p_meal_slot, p_food_id, p_custom_name,
     p_grams,
     case when p_food_id is not null then round(v_food_record.kcal * p_grams / 100, 2) else 0 end,
     case when p_food_id is not null then round(v_food_record.protein_g * p_grams / 100, 2) else 0 end,
@@ -341,7 +318,6 @@ declare
   v_role public.user_role;
   v_target jsonb;
 begin
-  -- Verifica permessi
   select role into v_role from public.profiles where id = v_user_id;
   
   if v_role = 'nutritionist' and not public.has_active_link(p_patient_id) then
@@ -352,24 +328,19 @@ begin
     raise exception 'forbidden' using errcode = '42501';
   end if;
   
-  -- Chiudi piano precedente se esiste
   update public.macro_plans
   set valid_to = p_valid_from - 1
   where patient_id = p_patient_id
     and (valid_to is null or valid_to >= p_valid_from);
   
-  -- Crea nuovo piano
   insert into public.macro_plans (patient_id, nutritionist_id, created_by, name, valid_from)
   values (
     p_patient_id,
     case when v_role = 'nutritionist' then v_user_id end,
-    v_user_id,
-    p_name,
-    p_valid_from
+    v_user_id, p_name, p_valid_from
   )
   returning id into v_plan_id;
   
-  -- Inserisci target se forniti
   if p_targets is not null then
     for v_target in select * from jsonb_array_elements(p_targets)
     loop
@@ -421,7 +392,6 @@ security definer
 set search_path = 'public'
 as $$
 begin
-  -- Verifica permessi
   if auth.uid() <> p_patient_id and not public.can_nutritionist_see(p_patient_id, 'adherence') then
     raise exception 'forbidden' using errcode = '42501';
   end if;
@@ -502,8 +472,8 @@ $$;
 -- ---------------------------------------------------------------------
 create or replace function public.create_personal_meal(
   p_name text,
-  p_default_slot public.meal_slot default null,
-  p_items jsonb
+  p_items jsonb,
+  p_default_slot public.meal_slot default null
 )
 returns uuid
 language plpgsql
@@ -515,12 +485,10 @@ declare
   v_item jsonb;
   v_position int := 0;
 begin
-  -- Crea pasto
   insert into public.personal_meals (patient_id, name, default_slot)
   values (auth.uid(), p_name, p_default_slot)
   returning id into v_meal_id;
   
-  -- Inserisci ingredienti
   for v_item in select * from jsonb_array_elements(p_items)
   loop
     v_position := v_position + 1;
