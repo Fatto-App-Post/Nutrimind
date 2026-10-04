@@ -15,13 +15,10 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare
-  v_results foods[];
-  v_barcode_match boolean;
 begin
   -- Cerca nel DB locale
-  select array_agg(f.* order by f.trust_level desc, f.name)
-  into v_results
+  return query
+  select f.*
   from foods f
   where f.is_active = true
     and (
@@ -29,19 +26,11 @@ begin
       or f.brand ilike '%' || p_query || '%'
       or f.barcode = p_query
     )
+  order by f.trust_level desc, f.name
   limit p_limit;
   
-  -- Se trovato, restituisci
-  if v_results is not null and array_length(v_results, 1) > 0 then
-    return query select unnest(v_results);
-    return;
-  end if;
-  
-  -- Se sembra un barcode (8-13 cifre), chiama Edge Function OFF
-  v_barcode_match := p_query ~ '^[0-9]{8,13}$';
-  
-  if v_barcode_match then
-    -- Chiama la Edge Function che cerca su OFF e cache nel DB
+  -- Se non trovato e sembra un barcode, chiama OFF
+  if not found and p_query ~ '^[0-9]{8,13}$' then
     return query
     select f.*
     from openfoodfacts_search_and_cache(p_query) f;
