@@ -1,31 +1,26 @@
 -- =====================================================================
 -- NutriMind — 012 NUOVE FUNZIONI PER FUNZIONALITÀ AGGIUNTIVE
--- - nutritionist_comments
--- - food_portions
 -- =====================================================================
 
--- ---------------------------------------------------------------------
 -- COMMENTI NUTRIZIONISTA: CREA COMMENTO
--- ---------------------------------------------------------------------
 create or replace function public.create_nutritionist_comment(
   p_patient_id uuid,
   p_comment_date date,
   p_body text,
-  p_meal_slot meal_slot default null,
+  p_meal_slot public.meal_slot default null,
   p_diary_entry_id uuid default null
 )
 returns uuid
 language plpgsql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
 declare
   v_comment_id uuid;
   v_user_id uuid := auth.uid();
-  v_role user_role;
+  v_role public.user_role;
 begin
-  -- Verifica permessi
-  select role into v_role from profiles where id = v_user_id;
+  select role into v_role from public.profiles where id = v_user_id;
   
   if v_role <> 'nutritionist' and v_role <> 'admin' then
     raise exception 'forbidden' using errcode = '42501';
@@ -35,61 +30,45 @@ begin
     raise exception 'forbidden' using errcode = '42501';
   end if;
   
-  -- Crea commento
-  insert into nutritionist_comments (
+  insert into public.nutritionist_comments (
     patient_id, nutritionist_id, comment_date, meal_slot, diary_entry_id, body
   ) values (
-    p_patient_id,
-    v_user_id,
-    p_comment_date,
-    p_meal_slot,
-    p_diary_entry_id,
-    p_body
+    p_patient_id, v_user_id, p_comment_date, p_meal_slot, p_diary_entry_id, p_body
   )
   returning id into v_comment_id;
   
-  -- Crea notifica per il paziente
-  insert into notifications (user_id, type, title, body, data)
+  insert into public.notifications (user_id, type, title, body, data)
   values (
-    p_patient_id,
-    'nutritionist_comment',
+    p_patient_id, 'nutritionist_comment',
     'Nuovo commento dal nutrizionista',
     'Hai ricevuto un nuovo commento per il giorno ' || to_char(p_comment_date, 'DD/MM/YYYY'),
-    jsonb_build_object(
-      'comment_id', v_comment_id,
-      'comment_date', p_comment_date,
-      'meal_slot', p_meal_slot
-    )
+    jsonb_build_object('comment_id', v_comment_id, 'comment_date', p_comment_date, 'meal_slot', p_meal_slot)
   );
   
   return v_comment_id;
 end;
 $$;
 
--- ---------------------------------------------------------------------
 -- COMMENTI NUTRIZIONISTA: OTTIENI COMMENTI PER PAZIENTE
--- ---------------------------------------------------------------------
 create or replace function public.get_nutritionist_comments(
   p_patient_id uuid,
   p_from date default null,
   p_to date default null
 )
-returns setof nutritionist_comments
+returns setof public.nutritionist_comments
 language sql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
   select nc.*
-  from nutritionist_comments nc
+  from public.nutritionist_comments nc
   where nc.patient_id = p_patient_id
     and (p_from is null or nc.comment_date >= p_from)
     and (p_to is null or nc.comment_date <= p_to)
   order by nc.comment_date desc, nc.created_at desc;
 $$;
 
--- ---------------------------------------------------------------------
 -- COMMENTI NUTRIZIONISTA: AGGIORNA COMMENTO
--- ---------------------------------------------------------------------
 create or replace function public.update_nutritionist_comment(
   p_comment_id uuid,
   p_body text
@@ -97,91 +76,80 @@ create or replace function public.update_nutritionist_comment(
 returns void
 language plpgsql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
 declare
   v_user_id uuid := auth.uid();
   v_nutritionist_id uuid;
 begin
-  -- Verifica che sia il creatore
   select nutritionist_id into v_nutritionist_id
-  from nutritionist_comments
+  from public.nutritionist_comments
   where id = p_comment_id;
   
   if v_nutritionist_id <> v_user_id then
     raise exception 'forbidden' using errcode = '42501';
   end if;
   
-  update nutritionist_comments
-  set
-    body = p_body,
-    edited_at = now()
+  update public.nutritionist_comments
+  set body = p_body, edited_at = now()
   where id = p_comment_id;
 end;
 $$;
 
--- ---------------------------------------------------------------------
 -- COMMENTI NUTRIZIONISTA: SEGNA COME LETTO
--- ---------------------------------------------------------------------
 create or replace function public.mark_comment_read(p_comment_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
 begin
-  update nutritionist_comments
+  update public.nutritionist_comments
   set read_at = now()
   where id = p_comment_id and patient_id = auth.uid();
 end;
 $$;
 
--- ---------------------------------------------------------------------
 -- COMMENTI NUTRIZIONISTA: ELIMINA COMMENTO
--- ---------------------------------------------------------------------
 create or replace function public.delete_nutritionist_comment(p_comment_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
 declare
   v_user_id uuid := auth.uid();
+  v_role public.user_role;
   v_nutritionist_id uuid;
-  v_role user_role;
 begin
-  select role into v_role from profiles where id = v_user_id;
+  select role into v_role from public.profiles where id = v_user_id;
   select nutritionist_id into v_nutritionist_id
-  from nutritionist_comments
+  from public.nutritionist_comments
   where id = p_comment_id;
   
   if v_role <> 'admin' and v_nutritionist_id <> v_user_id then
     raise exception 'forbidden' using errcode = '42501';
   end if;
   
-  delete from nutritionist_comments
+  delete from public.nutritionist_comments
   where id = p_comment_id;
 end;
 $$;
 
--- ---------------------------------------------------------------------
 -- PORZIONI CIBO: OTTIENI PORZIONI PER ALIMENTO
--- ---------------------------------------------------------------------
 create or replace function public.get_food_portions(p_food_id uuid)
-returns setof food_portions
+returns setof public.food_portions
 language sql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
   select fp.*
-  from food_portions fp
+  from public.food_portions fp
   where fp.food_id = p_food_id
   order by fp.grams;
 $$;
 
--- ---------------------------------------------------------------------
--- PORZIONI CIBO: CREA PORZIONE (solo nutrizionisti o admin)
--- ---------------------------------------------------------------------
+-- PORZIONI CIBO: CREA PORZIONE
 create or replace function public.create_food_portion(
   p_food_id uuid,
   p_label text,
@@ -190,33 +158,30 @@ create or replace function public.create_food_portion(
 returns uuid
 language plpgsql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
 declare
   v_portion_id uuid;
   v_user_id uuid := auth.uid();
-  v_role user_role;
+  v_role public.user_role;
 begin
-  -- Verifica permessi
-  select role into v_role from profiles where id = v_user_id;
+  select role into v_role from public.profiles where id = v_user_id;
   
   if v_role not in ('nutritionist', 'admin') then
     raise exception 'forbidden' using errcode = '42501';
   end if;
   
   if v_role = 'nutritionist' and not exists (
-    select 1 from profiles where id = v_user_id and professional_verified = true
+    select 1 from public.profiles where id = v_user_id and professional_verified = true
   ) then
     raise exception 'nutritionist_not_verified' using errcode = '42501';
   end if;
   
-  -- Verifica che l'alimento esista
-  if not exists (select 1 from foods where id = p_food_id) then
+  if not exists (select 1 from public.foods where id = p_food_id) then
     raise exception 'food_not_found' using errcode = 'P0002';
   end if;
   
-  -- Crea porzione
-  insert into food_portions (food_id, label, grams)
+  insert into public.food_portions (food_id, label, grams)
   values (p_food_id, p_label, p_grams)
   returning id into v_portion_id;
   
@@ -224,9 +189,7 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------
 -- PORZIONI CIBO: AGGIORNA PORZIONE
--- ---------------------------------------------------------------------
 create or replace function public.update_food_portion(
   p_portion_id uuid,
   p_label text default null,
@@ -235,19 +198,19 @@ create or replace function public.update_food_portion(
 returns void
 language plpgsql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
 declare
   v_user_id uuid := auth.uid();
-  v_role user_role;
+  v_role public.user_role;
 begin
-  select role into v_role from profiles where id = v_user_id;
+  select role into v_role from public.profiles where id = v_user_id;
   
   if v_role <> 'admin' then
     raise exception 'forbidden' using errcode = '42501';
   end if;
   
-  update food_portions
+  update public.food_portions
   set
     label = coalesce(p_label, label),
     grams = coalesce(p_grams, grams),
@@ -256,33 +219,29 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------
 -- PORZIONI CIBO: ELIMINA PORZIONE
--- ---------------------------------------------------------------------
 create or replace function public.delete_food_portion(p_portion_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
 declare
   v_user_id uuid := auth.uid();
-  v_role user_role;
+  v_role public.user_role;
 begin
-  select role into v_role from profiles where id = v_user_id;
+  select role into v_role from public.profiles where id = v_user_id;
   
   if v_role <> 'admin' then
     raise exception 'forbidden' using errcode = '42501';
   end if;
   
-  delete from food_portions
+  delete from public.food_portions
   where id = p_portion_id;
 end;
 $$;
 
--- ---------------------------------------------------------------------
--- DIARIO: OTTIENI COMMENTI CON ENTRATE (per dashboard nutrizionista)
--- ---------------------------------------------------------------------
+-- DIARIO: OTTIENI COMMENTI CON ENTRATE
 create or replace function public.get_diary_with_comments(
   p_patient_id uuid,
   p_from date,
@@ -290,13 +249,13 @@ create or replace function public.get_diary_with_comments(
 )
 returns table (
   entry_date date,
-  meal_slot meal_slot,
+  meal_slot public.meal_slot,
   entries jsonb,
   comments jsonb
 )
 language sql
 security definer
-set search_path = ''
+set search_path = 'public'
 as $$
   with diary_entries_agg as (
     select
@@ -314,8 +273,8 @@ as $$
         )
         order by de.logged_at
       ) as entries
-    from diary_entries de
-    left join foods f on f.id = de.food_id
+    from public.diary_entries de
+    left join public.foods f on f.id = de.food_id
     where de.patient_id = p_patient_id
       and de.entry_date between p_from and p_to
     group by de.entry_date, de.meal_slot
@@ -335,7 +294,7 @@ as $$
         )
         order by nc.created_at
       ) as comments
-    from nutritionist_comments nc
+    from public.nutritionist_comments nc
     where nc.patient_id = p_patient_id
       and nc.comment_date between p_from and p_to
     group by nc.comment_date, nc.meal_slot
