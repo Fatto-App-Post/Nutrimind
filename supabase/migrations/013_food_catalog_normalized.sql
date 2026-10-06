@@ -1,6 +1,6 @@
 -- NutriMind — 013 FOOD CATALOG NORMALIZZATO
--- DEV first: foods remains the canonical food/product table.
--- Child tables contain only repeated or structured Open Food Facts data.
+-- DEV first. foods remains the canonical NutriMind table.
+-- Repeated and nested source data is normalized into child tables.
 
 alter table public.foods
   add column if not exists external_code text,
@@ -41,11 +41,10 @@ create table if not exists public.food_tags (
   language text,
   label text,
   position smallint,
-  raw_data jsonb not null default '{}'::jsonb,
+  raw_data jsonb not null default '{}',
   created_at timestamptz not null default now(),
   unique (food_id, tag_type, tag, language)
 );
-
 create index if not exists food_tags_food_idx on public.food_tags(food_id);
 create index if not exists food_tags_lookup_idx on public.food_tags(tag_type, tag);
 
@@ -60,11 +59,10 @@ create table if not exists public.food_nutrients (
   per_serving numeric,
   per_portion numeric,
   prepared_value numeric,
-  raw_data jsonb not null default '{}'::jsonb,
+  raw_data jsonb not null default '{}',
   created_at timestamptz not null default now(),
   unique (food_id, nutrient_key)
 );
-
 create index if not exists food_nutrients_food_idx on public.food_nutrients(food_id);
 create index if not exists food_nutrients_key_value_idx on public.food_nutrients(nutrient_key, per_100g);
 
@@ -80,11 +78,10 @@ create table if not exists public.food_ingredients (
   vegetarian_status text,
   palm_oil_status text,
   analysis_tags text[] not null default '{}',
-  raw_data jsonb not null default '{}'::jsonb,
+  raw_data jsonb not null default '{}',
   created_at timestamptz not null default now(),
   unique (food_id, position)
 );
-
 create index if not exists food_ingredients_food_idx on public.food_ingredients(food_id);
 
 create table if not exists public.food_images (
@@ -96,14 +93,85 @@ create table if not exists public.food_images (
   url text,
   small_url text,
   thumb_url text,
-  selected boolean not null default false,
   uploaded_at timestamptz,
-  raw_data jsonb not null default '{}'::jsonb,
+  uploader text,
+  selected boolean not null default false,
+  sizes jsonb not null default '{}',
+  raw_data jsonb not null default '{}',
   created_at timestamptz not null default now()
 );
-
 create index if not exists food_images_food_idx on public.food_images(food_id);
 create index if not exists food_images_selected_idx on public.food_images(food_id, selected);
+
+create table if not exists public.food_packagings (
+  id uuid primary key default gen_random_uuid(),
+  food_id uuid not null references public.foods(id) on delete cascade,
+  position integer not null,
+  material text,
+  shape text,
+  recycling text,
+  food_contact boolean,
+  number_of_units numeric,
+  quantity_per_unit text,
+  weight_measured numeric,
+  environmental_score numeric,
+  raw_data jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  unique (food_id, position)
+);
+create index if not exists food_packagings_food_idx on public.food_packagings(food_id);
+
+create table if not exists public.food_quality (
+  id uuid primary key default gen_random_uuid(),
+  food_id uuid not null unique references public.foods(id) on delete cascade,
+  completeness numeric,
+  data_quality_overall numeric,
+  data_quality_general_information numeric,
+  data_quality_ingredients numeric,
+  data_quality_nutrition numeric,
+  data_quality_packaging numeric,
+  states text,
+  states_tags text[] not null default '{}',
+  quality_tags text[] not null default '{}',
+  warning_tags text[] not null default '{}',
+  error_tags text[] not null default '{}',
+  raw_data jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists food_quality_food_idx on public.food_quality(food_id);
+
+create table if not exists public.food_scores (
+  id uuid primary key default gen_random_uuid(),
+  food_id uuid not null references public.foods(id) on delete cascade,
+  score_type text not null,
+  grade text,
+  score numeric,
+  version text,
+  preparation text,
+  language text,
+  data jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  unique (food_id, score_type, version, preparation, language)
+);
+create index if not exists food_scores_food_idx on public.food_scores(food_id);
+create index if not exists food_scores_type_idx on public.food_scores(score_type, grade);
+
+create table if not exists public.food_sources (
+  id uuid primary key default gen_random_uuid(),
+  food_id uuid not null references public.foods(id) on delete cascade,
+  source_type text,
+  source_name text,
+  source_id text,
+  source_url text,
+  license text,
+  license_url text,
+  imported_at timestamptz,
+  raw_data jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  unique (food_id, source_type, source_name, source_id)
+);
+create index if not exists food_sources_food_idx on public.food_sources(food_id);
 
 create table if not exists public.food_snapshots (
   id uuid primary key default gen_random_uuid(),
@@ -119,9 +187,7 @@ create table if not exists public.food_snapshots (
   created_at timestamptz not null default now(),
   unique (food_id, response_hash)
 );
-
-create index if not exists food_snapshots_food_idx
-  on public.food_snapshots(food_id, captured_at desc);
+create index if not exists food_snapshots_food_idx on public.food_snapshots(food_id, captured_at desc);
 
 alter table public.food_off_sync_log
   add column if not exists food_id uuid references public.foods(id) on delete set null,
@@ -131,33 +197,24 @@ alter table public.food_off_sync_log
   add column if not exists source_updated_at timestamptz,
   add column if not exists changed_fields text[],
   add column if not exists payload_size_bytes integer;
+create index if not exists food_off_sync_log_food_idx on public.food_off_sync_log(food_id);
 
-create index if not exists food_off_sync_log_food_idx
-  on public.food_off_sync_log(food_id);
-
--- RLS: food catalog is readable with the same public food visibility model.
 alter table public.food_tags enable row level security;
 alter table public.food_nutrients enable row level security;
 alter table public.food_ingredients enable row level security;
 alter table public.food_images enable row level security;
+alter table public.food_packagings enable row level security;
+alter table public.food_quality enable row level security;
+alter table public.food_scores enable row level security;
+alter table public.food_sources enable row level security;
 alter table public.food_snapshots enable row level security;
 
-create policy "food tags readable for active foods"
-  on public.food_tags for select
-  using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
-
-create policy "food nutrients readable for active foods"
-  on public.food_nutrients for select
-  using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
-
-create policy "food ingredients readable for active foods"
-  on public.food_ingredients for select
-  using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
-
-create policy "food images readable for active foods"
-  on public.food_images for select
-  using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
-
-create policy "food snapshots readable for active foods"
-  on public.food_snapshots for select
-  using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food tags readable for active foods" on public.food_tags for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food nutrients readable for active foods" on public.food_nutrients for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food ingredients readable for active foods" on public.food_ingredients for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food images readable for active foods" on public.food_images for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food packagings readable for active foods" on public.food_packagings for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food quality readable for active foods" on public.food_quality for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food scores readable for active foods" on public.food_scores for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food sources readable for active foods" on public.food_sources for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
+create policy "food snapshots readable for active foods" on public.food_snapshots for select using (exists (select 1 from public.foods f where f.id = food_id and f.is_active));
