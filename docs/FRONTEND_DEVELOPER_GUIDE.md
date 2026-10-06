@@ -543,6 +543,21 @@ const { food_id, imported } = await response.json();
 // imported: true se nuovo, false se già esistente
 ```
 
+Gli alimenti importati hanno `source = 'openfoodfacts'` e `verification = 'unverified'`.
+In errore il body è `{ error, code }`:
+
+| HTTP | `code` | Significato |
+|------|--------|-------------|
+| 400 | `invalid_barcode` | barcode non valido (8-14 cifre) |
+| 401 | `unauthorized` | JWT mancante o non valido |
+| 404 | `product_not_found`, `incomplete_product` | prodotto assente su OFF o senza valori nutrizionali utilizzabili → trattare come "non trovato" |
+| 429 | `upstream_rate_limited`, `rate_limited` | rate limit OFF o limite di 30 alimenti/24h → temporaneo, riprovare (rispettare `Retry-After`) |
+| 502 / 503 / 504 | `upstream_error`, `upstream_unavailable` | OFF non disponibile → temporaneo, riprovare |
+| 500 | `internal_error` | errore interno |
+
+Secrets opzionali della funzione: `OFF_BASE_URI` (default: `https://world.openfoodfacts.net` su DEV, `.org` su PROD),
+`OFF_USER_AGENT` (es. `Nutrimind/0.1-dev (email@dominio)`), `OFF_USERNAME` / `OFF_PASSWORD` (default `off`/`off` su staging).
+
 ### `sync-off-batch`
 Sincronizza alimenti OFF in background (solo admin).
 
