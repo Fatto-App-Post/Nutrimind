@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [develop]
+
+env:
+  # Open Food Facts URLs
+  OFF_BASE_URI_DEV: https://world.openfoodfacts.net
+  OFF_BASE_URI_PROD: https://world.openfoodfacts.org
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, prod]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test (DEV)
+        if: matrix.environment == 'dev'
+        run: dotnet test --no-build --verbosity normal --configuration Release
+        env:
+          Supabase__Url: ${{ secrets.SUPABASE_DEV_URL }}
+          Supabase__ServiceRoleKey: ${{ secrets.SUPABASE_DEV_SECRET_KEY }}
+          Supabase__PublishableKey: ${{ secrets.SUPABASE_DEV_PUBLISHABLE_KEY }}
+          Supabase__JwksUrl: ${{ secrets.SUPABASE_DEV_JWKS_URL }}
+          OpenFoodFacts__BaseUri: ${{ env.OFF_BASE_URI_DEV }}
+
+      - name: Test (PROD)
+        if: matrix.environment == 'prod'
+        run: dotnet test --no-build --verbosity normal --configuration Release
+        env:
+          Supabase__Url: ${{ secrets.SUPABASE_PROD_URL }}
+          Supabase__ServiceRoleKey: ${{ secrets.SUPABASE_PROD_SECRET_KEY }}
+          Supabase__PublishableKey: ${{ secrets.SUPABASE_PROD_PUBLISHABLE_KEY }}
+          Supabase__JwksUrl: ${{ secrets.SUPABASE_PROD_JWKS_URL }}
+          OpenFoodFacts__BaseUri: ${{ env.OFF_BASE_URI_PROD }}
+
+  deploy-preview:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy preview (placeholder)
+        run: echo "Preview deployment - to be implemented"
+
+  deploy-prod:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production (placeholder)
+        run: echo "Production deployment - to be implemented"
