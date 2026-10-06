@@ -28,50 +28,44 @@ Questa è la lista **completa e ordinata** di tutte le configurazioni che devi f
    - Nella sidebar, clicca su **Build** > **Cloud Messaging**
    - Se non è già abilitato, clicca "Get started"
 
-3. **Ottieni Server Key:**
+3. **Genera la chiave del service account** (API FCM HTTP v1; la "server key"
+   legacy non esiste più: Google ha dismesso l'API `fcm/send` a luglio 2024):
    - Vai su **Project Settings** (ingranaggio in alto a sinistra)
    - Tab **Service accounts**
-   - Clicca **Generate new private key**
-   - Scarica il file JSON
-   - Apri il file e copia il valore di `server_key` (è una stringa lunghissima che inizia con `AAAA...`)
+   - Clicca **Generate new private key** e scarica il file JSON
+   - Non condividere il file (contiene una chiave privata) e non committarlo
 
 4. **Configura su Supabase DEV:**
-   - Vai su https://supabase.com/dashboard/project/tcszsyzpvmsifclziujc/settings/edge-functions
-   - Clicca **New secret**
-   - Name: `FIREBASE_SERVER_KEY`
-   - Value: incolla la server key copiata prima
-   - Clicca **Save secret**
+   - Vai su https://supabase.com/dashboard/project/tcszsyzpvmsifclziujc/functions/secrets
+   - Name: `FIREBASE_SERVICE_ACCOUNT`
+   - Value: incolla **tutto** il contenuto del file JSON
+   - Salva, poi rifai il deploy di `send-notification`
 
 5. **Configura su Supabase PROD:**
-   - Vai su https://supabase.com/dashboard/project/ynnlfxgehbtlneiknrfr/settings/edge-functions
+   - Vai su https://supabase.com/dashboard/project/ynnlfxgehbtlneiknrfr/functions/secrets
    - Ripeti lo stesso passaggio
+
+6. **Web push (frontend):** Cloud Messaging > Certificati push web > genera la
+   coppia di chiavi e usa la chiave pubblica come `FIREBASE_VAPID_KEY` nell'app.
 
 ### **Valore da Inserire:**
 
 ```env
-FIREBASE_SERVER_KEY=AAAAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}
 ```
 
 ### **Come Verificare:**
 
-```typescript
-// Nel frontend, dopo aver configurato:
-const response = await fetch('https://tcszsyzpvmsifclziujc.supabase.co/functions/v1/send-notification', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer YOUR_ANON_KEY',
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    title: 'Test',
-    body: 'Se vedi questa notifica, Firebase è configurato!',
-    user_id: 'tuo-user-id'
-  })
-});
+Dashboard Supabase > Edge Functions > `send-notification` > **Test**, ruolo
+`service_role`, body:
 
-console.log(await response.json()); // { sent: 0, message: 'No device tokens found' }
-// "No device tokens found" va bene - significa che Firebase funziona!
+```json
+{"title":"Test","body":"Prova","user_id":"00000000-0000-0000-0000-000000000000"}
 ```
+
+Risposta attesa: `{"sent":0,"total":0,"message":"No device tokens found"}`.
+`send-notification` accetta solo il service role, un admin o un nutrizionista
+collegato al destinatario: non va chiamata con la anon key dal frontend.
 
 ### **Costo:**
 - ✅ **Gratis** fino a 100 milioni di messaggi/mese
@@ -328,7 +322,7 @@ Se vedi le 3 funzioni, è applicata correttamente!
 
 | Configurazione | DEV | PROD | Priorità |
 |----------------|-----|------|----------|
-| Firebase Server Key | ⏳ Da fare | ⏳ Da fare | 🔴 ALTA |
+| Firebase Service Account | ✅ Fatto | ⏳ Da fare | 🔴 ALTA |
 | Resend API Key | ⏳ Da fare | ⏳ Da fare | 🟡 MEDIA |
 | Google OAuth | ⚪ Opzionale | ⚪ Opzionale | 🔵 BASSA |
 | Trigger Auth | ✅ Fatto | ⏳ Da verificare | 🔴 ALTA |

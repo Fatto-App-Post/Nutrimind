@@ -33,3 +33,7 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+
+# Secret locali delle Edge Functions (mai committare)
+supabase/.env.secrets
+supabase/firebase-service-account.json
