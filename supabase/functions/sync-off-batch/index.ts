@@ -1,10 +1,50 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// Sincronizzazione in blocco dei prodotti in attesa in food_off_sync_log.
+// Solo per admin, oppure con la chiave di servizio (job schedulato).
+//
+// Correzioni rispetto alla versione precedente:
+// - `source: 'off'` non esiste nell'enum food_source: ogni upsert veniva
+//   rifiutato. Il valore corretto è 'openfoodfacts';
+// - gli import automatici nascono 'unverified': marcarli 'verified' senza
+//   una revisione umana falsava il livello di affidabilità mostrato in app;
+// - `sync.attempt_count` veniva usato senza essere selezionato (NaN);
+// - ambiente: su DEV si usa il server di staging, come le altre funzioni;
+// - pausa di 6,5 secondi tra le richieste, come chiede Open Food Facts.
+
+const OFF_BASE_URI_DEV = 'https://world.openfoodfacts.net';
+const OFF_BASE_URI_PROD = 'https://world.openfoodfacts.org';
+const PROD_PROJECT_REF = 'ynnlfxgehbtlneiknrfr';
+const BATCH_SIZE = 20;
+const PAUSE_MS = 6_500;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const num = (v: unknown): number | null => {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+};
+
+function offConfig() {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const isProd = supabaseUrl.includes(PROD_PROJECT_REF);
+  const baseUri = (Deno.env.get('OFF_BASE_URI') ?? (isProd ? OFF_BASE_URI_PROD : OFF_BASE_URI_DEV)).replace(/\/+$/, '');
+  const userAgent = Deno.env.get('OFF_USER_AGENT') ?? (isProd ? 'Nutrimind/0.1' : 'Nutrimind/0.1-dev');
+  const isStaging = new URL(baseUri).hostname.endsWith('openfoodfacts.net');
+  const username = Deno.env.get('OFF_USERNAME') ?? (isStaging ? 'off' : undefined);
+  const password = Deno.env.get('OFF_PASSWORD') ?? (isStaging ? 'off' : undefined);
+  const headers: Record<string, string> = { 'User-Agent': userAgent, Accept: 'application/json' };
+  if (username && password) headers.Authorization = `Basic ${btoa(`${username}:${password}`)}`;
+  return { baseUri, headers };
+}
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -12,147 +52,150 @@ serve(async (req: Request) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    );
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceRoleKey);
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
-      throw new Error('Unauthorized');
+    // Autorizzazione: chiave di servizio (job) oppure utente admin
+    const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+    if (!bearer) return json({ error: 'Unauthorized', code: 'unauthorized' }, 401);
+    if (bearer !== serviceRoleKey) {
+      const { data: { user }, error: userError } = await admin.auth.getUser(bearer);
+      if (userError || !user) return json({ error: 'Unauthorized', code: 'unauthorized' }, 401);
+      const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (profile?.role !== 'admin') return json({ error: 'Forbidden', code: 'forbidden' }, 403);
     }
 
-    // Check if user is admin
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role !== 'admin') {
-      throw new Error('Admin only');
-    }
-
-    // Get barcodes to sync from food_off_sync_log
-    const { data: pendingSyncs } = await supabaseClient
+    const { data: pending, error: pendingError } = await admin
       .from('food_off_sync_log')
-      .select('barcode, id')
+      .select('id, barcode, attempt_count')
       .eq('status', 'pending')
-      .lte('next_retry_at', new Date().toISOString())
-      .limit(50);
+      .or(`next_retry_at.is.null,next_retry_at.lte.${new Date().toISOString()}`)
+      .order('started_at')
+      .limit(BATCH_SIZE);
+    if (pendingError) throw pendingError;
 
-    if (!pendingSyncs || pendingSyncs.length === 0) {
-      return new Response(
-        JSON.stringify({ synced: 0, message: 'No pending syncs' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (!pending || pending.length === 0) {
+      return json({ synced: 0, errors: 0, total: 0, message: 'Nessun prodotto in attesa' });
     }
 
+    const { baseUri, headers } = offConfig();
     let synced = 0;
     let errors = 0;
 
-    for (const sync of pendingSyncs) {
+    for (const [i, row] of pending.entries()) {
+      if (i > 0) await sleep(PAUSE_MS);
       try {
-        const offUrl = `https://world.openfoodfacts.org/api/v0/product/${sync.barcode}.json`;
-        const offResponse = await fetch(offUrl);
-        
-        if (!offResponse.ok) {
-          await supabaseClient
-            .from('food_off_sync_log')
-            .update({
-              status: 'failed',
-              error_message: 'OFF API error',
-              next_retry_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-              attempt_count: sync.attempt_count + 1,
-            })
-            .eq('id', sync.id);
+        const res = await fetch(
+          `${baseUri}/api/v2/product/${row.barcode}?fields=code,product_name,product_name_it,brands,quantity,serving_size,serving_quantity,nutriments,nutriscore_grade,nova_group`,
+          { headers, signal: AbortSignal.timeout(12_000) },
+        );
+
+        if (res.status === 404) {
+          await admin.from('food_off_sync_log').update({
+            status: 'not_found',
+            http_status: 404,
+            off_status_verbose: 'Prodotto non presente su Open Food Facts',
+            finished_at: new Date().toISOString(),
+          }).eq('id', row.id);
+          errors++;
+          continue;
+        }
+        if (!res.ok) {
+          await admin.from('food_off_sync_log').update({
+            status: 'pending',
+            http_status: res.status,
+            error_message: `HTTP ${res.status}`,
+            attempt_count: (row.attempt_count ?? 0) + 1,
+            next_retry_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+          }).eq('id', row.id);
           errors++;
           continue;
         }
 
-        const offData = await offResponse.json();
-        
-        if (offData.status !== 1 || !offData.product) {
-          await supabaseClient
-            .from('food_off_sync_log')
-            .update({
-              status: 'not_found',
-              off_status_verbose: 'Product not found on OFF',
-              finished_at: new Date().toISOString(),
-            })
-            .eq('id', sync.id);
+        const data = await res.json();
+        const product = data?.product;
+        if (data?.status !== 1 || !product) {
+          await admin.from('food_off_sync_log').update({
+            status: 'not_found',
+            http_status: res.status,
+            off_status_verbose: data?.status_verbose ?? 'Prodotto non trovato',
+            finished_at: new Date().toISOString(),
+          }).eq('id', row.id);
           errors++;
           continue;
         }
 
-        const product = offData.product;
+        const n = product.nutriments ?? {};
+        const kcal = num(n['energy-kcal_100g']) ??
+          (num(n['energy_100g']) != null ? Math.round(num(n['energy_100g'])! / 4.184) : null);
+        const name = (product.product_name_it || product.product_name || '').toString().trim();
+        if (!name || kcal == null) {
+          await admin.from('food_off_sync_log').update({
+            status: 'not_found',
+            http_status: res.status,
+            off_status_verbose: 'Dati nutrizionali incompleti',
+            finished_at: new Date().toISOString(),
+          }).eq('id', row.id);
+          errors++;
+          continue;
+        }
 
-        // Update or insert food
-        const { error: upsertError } = await supabaseClient
+        const { data: food, error: upsertError } = await admin
           .from('foods')
           .upsert({
-            name: product.product_name || 'Unknown',
-            brand: product.brands || null,
+            name,
+            brand: (product.brands ?? '').toString().split(',')[0].trim() || null,
             barcode: product.code,
-            source: 'off',
+            source: 'openfoodfacts',
             source_id: product.code,
-            verification: 'verified',
-            verified_by: user.id,
-            verified_at: new Date().toISOString(),
-            kcal: product.nutriments?.['energy-kcal_100g'] || 0,
-            protein_g: product.nutriments?.proteins_100g || 0,
-            carbs_g: product.nutriments?.carbohydrates_100g || 0,
-            fat_g: product.nutriments?.fat_100g || 0,
-            fiber_g: product.nutriments?.fiber_100g || null,
-            sugars_g: product.nutriments?.sugars_100g || null,
-            saturated_fat_g: product.nutriments?.['saturated-fat_100g'] || null,
-            salt_g: product.nutriments?.salt_100g || null,
-            serving_g: product.serving_size ? parseFloat(product.serving_size) : null,
-            serving_label: product.serving_size || null,
+            external_code: product.code,
+            external_api_version: 'v2',
+            external_last_synced_at: new Date().toISOString(),
+            // Gli import automatici restano da verificare
+            verification: 'unverified',
+            kcal,
+            protein_g: num(n.proteins_100g) ?? 0,
+            carbs_g: num(n.carbohydrates_100g) ?? 0,
+            fat_g: num(n.fat_100g) ?? 0,
+            fiber_g: num(n.fiber_100g),
+            sugars_g: num(n.sugars_100g),
+            saturated_fat_g: num(n['saturated-fat_100g']),
+            salt_g: num(n.salt_100g),
+            serving_g: num(product.serving_quantity),
+            serving_label: (product.serving_size ?? null) || null,
+            quantity_text: (product.quantity ?? null) || null,
+            nutriscore_grade: (product.nutriscore_grade ?? null) || null,
+            nova_group: num(product.nova_group),
             is_active: true,
-          }, {
-            onConflict: 'barcode'
-          });
+          }, { onConflict: 'source,source_id' })
+          .select('id')
+          .single();
+        if (upsertError) throw upsertError;
 
-        if (upsertError) {
-          throw upsertError;
-        }
-
-        await supabaseClient
-          .from('food_off_sync_log')
-          .update({
-            status: 'synced',
-            off_status_verbose: 'Successfully synced',
-            finished_at: new Date().toISOString(),
-          })
-          .eq('id', sync.id);
-
+        await admin.from('food_off_sync_log').update({
+          status: 'done',
+          food_id: food.id,
+          http_status: 200,
+          api_version: 'v2',
+          error_message: null,
+          finished_at: new Date().toISOString(),
+        }).eq('id', row.id);
         synced++;
-      } catch (err) {
-        console.error('Error syncing barcode:', sync.barcode, err);
-        await supabaseClient
-          .from('food_off_sync_log')
-          .update({
-            status: 'failed',
-            error_message: err instanceof Error ? err.message : 'Unknown error',
-            next_retry_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-            attempt_count: sync.attempt_count + 1,
-          })
-          .eq('id', sync.id);
+      } catch (e) {
+        console.error('sync error', row.barcode, e instanceof Error ? e.message : e);
+        await admin.from('food_off_sync_log').update({
+          status: 'pending',
+          error_message: e instanceof Error ? e.message.slice(0, 300) : 'errore',
+          attempt_count: (row.attempt_count ?? 0) + 1,
+          next_retry_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+        }).eq('id', row.id);
         errors++;
       }
     }
 
-    return new Response(
-      JSON.stringify({ synced, errors, total: pendingSyncs.length }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return json({ synced, errors, total: pending.length });
   } catch (error) {
-    console.error('Error in sync-off-batch:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('Error syncing batch:', error instanceof Error ? error.message : error);
+    return json({ error: 'Internal error', code: 'internal_error' }, 500);
   }
 });

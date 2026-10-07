@@ -166,10 +166,10 @@ Tutte attive su DEV. Il codice sta in `supabase/functions/`.
 |---|---|---|
 | `search-off` | Ricerca nel catalogo esteso | Normalizza i campi come la tabella `foods`. Usa `cgi/search.pl`: `/api/v2/search` **ignora la ricerca testuale** e restituisce prodotti casuali |
 | `import-off-barcode` | Importa un prodotto per codice a barre | Scrive con privilegi di servizio dopo aver validato l'utente |
-| `sync-off-batch` | Sincronizzazione in blocco (solo admin) | Mai verificata |
+| `sync-off-batch` | Sincronizzazione in blocco (solo admin, o job con chiave di servizio) | Riscritta: scriveva un valore di `source` inesistente e marcava gli import come verificati. Mai usata finora |
 | `send-notification` | Push tramite Firebase | API FCM HTTP v1 con il secret `FIREBASE_SERVICE_ACCOUNT`. La vecchia API con "server key" è stata dismessa da Google a luglio 2024 |
 | `send-email` | Email trasazionali | Richiede Resend, non ancora configurato |
-| `generate-meal-plan` | Proposta di menu | **Da correggere**: usa il valore `snack`, che non esiste |
+| `generate-meal-plan` | Proposta di menu | Funziona ma propone alimenti sfusi, non ricette; l'app non la usa |
 | `analyze-adherence` | Aderenza al piano, giorno per giorno | Riscritta: controlla consenso e usa il piano valido in ciascun giorno |
 
 Le funzioni che l'app chiama hanno la verifica del token attiva. L'app

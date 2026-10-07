@@ -9,7 +9,7 @@ const corsHeaders = {
 interface FoodSuggestion {
   food_id: string;
   name: string;
-  meal_slot: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  meal_slot: 'breakfast' | 'morning_snack' | 'lunch' | 'afternoon_snack' | 'dinner' | 'evening_snack';
   grams: number;
   kcal: number;
   protein_g: number;

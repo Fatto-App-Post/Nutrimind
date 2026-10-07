@@ -24,11 +24,12 @@ Poi, dal suo profilo, attivare "Mostrami in Trova un nutrizionista".
 Da provare in quest'ordine: registrazione, diario, ricerca con filtri,
 codice a barre, ricetta inviata e approvata, invito, chat, progressi.
 
-### 1.2 `generate-meal-plan` usa un valore inesistente — **S**
-La funzione genera pasti con `meal_slot: 'snack'`, che non esiste
-nell'enum: ogni inserimento verrebbe rifiutato. Va riscritta sui valori
-corretti e, già che si tocca, dovrebbe proporre **le ricette del
-nutrizionista** invece dei singoli alimenti. Oggi l'app non la usa.
+### 1.2 `generate-meal-plan` propone solo alimenti sfusi — **M**
+Funziona, ma suggerisce singoli alimenti presi dal catalogo: poco utile
+per un paziente. Dovrebbe proporre **le ricette del nutrizionista**
+adatte a quel pasto e a quelle restrizioni, che ora esistono. Oggi l'app
+non la usa affatto: andrebbe collegata al diario come terza via di
+aggiunta ("Proponi tu"), oppure rimossa.
 
 ### 1.3 Pannello per le verifiche professionali — **M**
 Senza questo nessun professionista può essere abilitato se non via SQL.
