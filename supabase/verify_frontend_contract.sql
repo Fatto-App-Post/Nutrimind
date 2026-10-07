@@ -33,7 +33,22 @@ with expected_rpc(name, args) as (
     ('redeem_invitation',           '{p_code,p_scopes,p_policy_version}'),
     ('revoke_link',                 '{p_link_id}'),
     ('grant_consent',               '{p_link_id,p_scope,p_policy_version}'),
-    ('revoke_consent',              '{p_link_id,p_scope}')
+    ('revoke_consent',              '{p_link_id,p_scope}'),
+    -- 016: ricette, vetrina, chat
+    ('submit_meal_for_review',      '{p_meal_id}'),
+    ('withdraw_meal',               '{p_meal_id}'),
+    ('review_meal',                 '{p_meal_id,p_approve,p_notes}'),
+    ('publish_own_meal',            '{p_meal_id,p_visibility}'),
+    ('unpublish_own_meal',          '{p_meal_id}'),
+    ('log_suggested_meal',          '{p_meal_id,p_date,p_slot,p_servings}'),
+    ('get_recipes_for_me',          '{p_slot,p_restrictions,p_query}'),
+    ('get_meals_to_review',         '{}'),
+    ('search_nutritionists',        '{p_query,p_specialty,p_restriction,p_online}'),
+    ('start_conversation',          '{p_other}'),
+    ('send_message',                '{p_conversation,p_body,p_kind,p_payload}'),
+    ('send_invitation_message',     '{p_conversation}'),
+    ('mark_conversation_read',      '{p_conversation}'),
+    ('get_my_conversations',        '{}')
 ),
 fn as (
   select p.proname, p.oid, coalesce(p.proargnames, '{}') as argnames,
@@ -54,7 +69,12 @@ expected_table(name, privs) as (
     ('personal_meals', 'SELECT'),
     ('macro_plan_targets', 'SELECT'),
     ('notifications', 'SELECT'),
-    ('device_tokens', 'SELECT,INSERT,DELETE')
+    ('device_tokens', 'SELECT,INSERT,DELETE'),
+    ('suggested_meals', 'SELECT,INSERT,UPDATE,DELETE'),
+    ('suggested_meal_items', 'SELECT,INSERT,UPDATE,DELETE'),
+    ('nutritionist_plan_templates', 'SELECT,INSERT,UPDATE,DELETE'),
+    ('conversations', 'SELECT'),
+    ('messages', 'SELECT')
 ),
 checks(kind, name, detail, ok, problem) as (
   -- RPC: esistenza, parametri passati dal frontend, EXECUTE
@@ -134,6 +154,14 @@ checks(kind, name, detail, ok, problem) as (
     exists (select 1 from pg_publication_tables
             where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notifications'),
     'opzionale: badge notifiche in tempo reale'
+
+  union all
+
+  select
+    'realtime', 'messages', 'publication supabase_realtime',
+    exists (select 1 from pg_publication_tables
+            where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'messages'),
+    'serve per la chat in tempo reale'
 )
 select kind, name, detail, ok, case when ok then '' else problem end as problem
 from checks
