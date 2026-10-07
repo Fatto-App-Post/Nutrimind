@@ -1,6 +1,7 @@
 # NutriMind — prossimi passi
 
-Aggiornato al **7 ottobre 2026**, dopo la prova del lato professionista.
+Aggiornato all'**8 ottobre 2026**. A questo punto i tre ruoli — paziente,
+professionista, amministratore — sono stati percorsi tutti a schermo.
 Per lo stato e i vincoli del database vedere
 [CONTESTO_PROGETTO.md](CONTESTO_PROGETTO.md).
 
@@ -35,10 +36,52 @@ sullo schermo:
 - `Consigliati per te` con l'alimento, l'autore e la nota;
 - campanella con il contatore delle notifiche a 1.
 
-**Non provato cliccando**: il pannello di amministrazione (serve un
-accesso come amministratore: l'unica utenza con quel ruolo è
-`pasquinapoli1@gmail.com`, di cui non ho la password) e le notifiche
-push, che non partono ancora (punto 2.2).
+**Come amministratore** (`nutri.prova` promosso a `admin`): il quadro
+generale conta le decisioni in attesa e fa scattare i due avvisi sui
+numeri ("nessuno si è reso visibile", "catalogo molto piccolo"); la coda
+degli alimenti mostra i due alimenti scritti dal paziente e segnala da sé
+l'incoerenza (*"Le calorie dichiarate (90) non tornano con i macro (480
+kcal)"*). Verificato uno e rifiutato l'altro: nel database il primo passa
+a `verified` con `trust_level` da 1 a 2, `verified_by` e `verified_at`
+valorizzati; il secondo a `rejected`, `trust_level` 0. `review_food`
+esisteva dalla prima migration e questa è la prima volta che viene
+eseguita.
+
+**Non provato cliccando**: le notifiche push, che non partono ancora
+(punto 2.2), e Android e iOS, mai compilati (manca l'SDK Android in
+locale).
+
+**Un effetto da tenere a mente**: promuovere un professionista ad `admin`
+gli svuota la lista pazienti, perché `get_my_patients` filtra per ruolo.
+Il collegamento resta nel database, ma non si vede più. Se un
+amministratore deve anche seguire pazienti, va deciso come trattare il
+caso; per ora conviene tenere i due ruoli su utenze separate.
+
+---
+
+## Da dove ripartire
+
+Le migration sono tutte applicate e i tre ruoli funzionano. Le cose
+ferme non sono più difetti dell'app, sono pezzi che mancano. In ordine di
+quanto pesano:
+
+1. **Il catalogo alimenti è quasi vuoto** (punto 2.1): quattro righe. È
+   il collo di bottiglia di tutto il resto — ricerca per valori
+   nutrizionali, ricette composte, consigli mirati. Richiede una
+   decisione sulla fonte, non solo del codice.
+2. **Le notifiche push non partono** (punto 2.2): il database le crea e
+   nessuno le inoltra. Serve attivare i Webhooks dalla dashboard, poi è
+   mezz'ora di lavoro.
+3. **Android e iOS non sono mai stati compilati**: serve l'SDK Android
+   in locale. Finché resta solo il web, un'app di food tracking non si
+   può provare davvero: la fotocamera per il codice a barre è il suo
+   gesto principale.
+4. **`flutter drive` con `integration_test`** (punto 1.3): renderebbe
+   ripetibile tutto quello che oggi si prova a mano, e tolgo di mezzo gli
+   eventi sintetici.
+
+Il resto (menu della settimana, foto, lista della spesa, peso) sono
+funzioni nuove: valgono dopo che il catalogo c'è.
 
 ---
 
@@ -130,8 +173,8 @@ a giorni alterni servirebbe distinguere almeno "giorni di allenamento" e
 
 ### 2.5 Suggerimenti per chi amministra — **M**
 
-Il quadro generale ora dice cosa aspetta una decisione. Tre cose che
-mancano e che un amministratore si trova a dover fare prima o poi:
+Il pannello funziona (quadro, abilitazioni, coda alimenti). Tre cose
+che mancano e che un amministratore si trova a dover fare prima o poi:
 
 - **cercare una persona**: non si può aprire un profilo partendo da un
   indirizzo email, quindi ogni richiesta di assistenza finisce in una

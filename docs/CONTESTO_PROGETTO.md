@@ -1,6 +1,6 @@
 # NutriMind — contesto del progetto
 
-Documento unico di riferimento, aggiornato al **7 ottobre 2026**. Riassume e
+Documento unico di riferimento, aggiornato all'**8 ottobre 2026**. Riassume e
 sostituisce i file rimossi perché obsoleti o superati dal codice:
 `SETUP_COMPLETO.md`, `CONFIGURAZIONI_MANCANTI.md`, `supabase/README.md`,
 `docs/API_Utenze_Frontend.md`, `docs/FRONTEND_DEVELOPER_GUIDE.md`,
@@ -264,7 +264,11 @@ sanitari richiede un consenso a parte.
    aggiornate nei secret di GitHub Actions.
 2. **Chiave privata Firebase** incollata in chat durante lo sviluppo:
    conviene generarne una nuova e sostituire il secret.
-3. Le verifiche professionali si approvano dall'app (migration 024), ma
+3. Promuovere un professionista ad `admin` gli svuota la lista pazienti:
+   `my_patients_overview` esce subito se il ruolo non è `nutritionist`.
+   Il collegamento resta nel database. Meglio tenere i due ruoli su
+   utenze separate.
+4. Le verifiche professionali si approvano dall'app (migration 024), ma
    **il primo amministratore lo si nomina a mano**, ed è giusto che resti
    l'unica cosa fuori dall'app:
 
