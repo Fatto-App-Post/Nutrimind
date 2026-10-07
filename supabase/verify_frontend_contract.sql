@@ -1,113 +1,85 @@
 -- =====================================================================
 -- NutriMind — verifica (sola lettura) del contratto DB usato dal frontend
--- Un'unica query: il SQL Editor di Supabase mostra solo l'ultimo
--- risultato. Le righe con ok = false sono problemi da risolvere.
+--
+-- Un'unica query: restituisce il totale dei controlli, quanti passano e
+-- l'elenco dei soli problemi. Se `problemi` è [] il database è allineato
+-- all'app (migration 014-019).
 -- =====================================================================
 
-with expected_rpc(name, args) as (
-  values
-    ('search_foods',                '{p_query,p_limit}'),
-    ('get_food',                    '{p_id}'),
-    ('get_food_by_barcode',         '{p_barcode}'),
-    ('get_food_portions',           '{p_food_id}'),
-    ('create_food',                 '{p_name,p_kcal,p_protein_g,p_carbs_g,p_fat_g,p_brand,p_barcode}'),
-    ('create_food_portion',         '{p_food_id,p_label,p_grams}'),
-    ('log_meal',                    '{p_entry_date,p_meal_slot,p_grams,p_food_id}'),
-    ('get_diary_entries',           '{p_date}'),
-    ('delete_diary_entry',          '{p_entry_id}'),
-    ('add_favorite_food',           '{p_food_id,p_default_grams}'),
-    ('get_favorite_foods',          '{}'),
-    ('create_personal_meal',        '{p_name,p_items,p_default_slot}'),
-    ('log_personal_meal',           '{p_meal_id,p_date,p_slot}'),
-    ('get_current_macro_plan',      '{}'),
-    ('start_macro_plan',            '{p_patient_id,p_name,p_valid_from,p_targets}'),
-    ('get_patient_adherence',       '{p_patient_id,p_from,p_to,p_tolerance}'),
-    ('get_my_patients',             '{}'),
-    ('get_diary_with_comments',     '{p_patient_id,p_from,p_to}'),
-    ('create_nutritionist_comment', '{p_patient_id,p_comment_date,p_body,p_meal_slot}'),
-    ('get_nutritionist_comments',   '{p_patient_id,p_from,p_to}'),
-    ('mark_comment_read',           '{p_comment_id}'),
-    ('get_unread_notifications',    '{}'),
-    ('mark_notification_read',      '{p_notification_id}'),
-    ('create_invitation',           '{}'),
-    ('redeem_invitation',           '{p_code,p_scopes,p_policy_version}'),
-    ('revoke_link',                 '{p_link_id}'),
-    ('grant_consent',               '{p_link_id,p_scope,p_policy_version}'),
-    ('revoke_consent',              '{p_link_id,p_scope}'),
-    -- 016: ricette, vetrina, chat
-    ('submit_meal_for_review',      '{p_meal_id}'),
-    ('withdraw_meal',               '{p_meal_id}'),
-    ('review_meal',                 '{p_meal_id,p_approve,p_notes}'),
-    ('publish_own_meal',            '{p_meal_id,p_visibility}'),
-    ('unpublish_own_meal',          '{p_meal_id}'),
-    ('log_suggested_meal',          '{p_meal_id,p_date,p_slot,p_servings}'),
-    ('get_recipes_for_me',          '{p_slot,p_restrictions,p_query}'),
-    ('get_meals_to_review',         '{}'),
-    ('search_nutritionists',        '{p_query,p_specialty,p_restriction,p_online}'),
-    ('start_conversation',          '{p_other}'),
-    ('send_message',                '{p_conversation,p_body,p_kind,p_payload}'),
-    ('send_invitation_message',     '{p_conversation}'),
-    ('mark_conversation_read',      '{p_conversation}'),
-    ('get_my_conversations',        '{}')
+with expected_rpc(name, args) as (values
+  -- catalogo
+  ('search_foods','{p_query,p_limit,p_min_protein,p_max_protein,p_min_carbs,p_max_carbs,p_min_fat,p_max_fat,p_min_kcal,p_max_kcal,p_sort}'),
+  ('get_food','{p_id}'),('get_food_by_barcode','{p_barcode}'),('get_food_portions','{p_food_id}'),
+  ('create_food','{p_name,p_kcal,p_protein_g,p_carbs_g,p_fat_g,p_brand,p_barcode}'),
+  ('create_food_portion','{p_food_id,p_label,p_grams}'),
+  -- diario, preferiti, pasti personali
+  ('log_meal','{p_entry_date,p_meal_slot,p_grams,p_food_id}'),('get_diary_entries','{p_date}'),
+  ('delete_diary_entry','{p_entry_id}'),('add_favorite_food','{p_food_id,p_default_grams}'),
+  ('get_favorite_foods','{}'),('create_personal_meal','{p_name,p_items,p_default_slot}'),
+  ('log_personal_meal','{p_meal_id,p_date,p_slot}'),
+  -- piani e aderenza
+  ('get_current_macro_plan','{}'),('start_macro_plan','{p_patient_id,p_name,p_valid_from,p_targets}'),
+  ('get_patient_adherence','{p_patient_id,p_from,p_to,p_tolerance}'),('get_my_patients','{}'),
+  ('get_diary_with_comments','{p_patient_id,p_from,p_to}'),
+  -- commenti e notifiche
+  ('create_nutritionist_comment','{p_patient_id,p_comment_date,p_body,p_meal_slot}'),
+  ('get_nutritionist_comments','{p_patient_id,p_from,p_to}'),('mark_comment_read','{p_comment_id}'),
+  ('get_unread_notifications','{}'),('mark_notification_read','{p_notification_id}'),
+  -- inviti, collegamenti, consensi
+  ('create_invitation','{}'),('redeem_invitation','{p_code,p_scopes,p_policy_version}'),
+  ('revoke_link','{p_link_id}'),('grant_consent','{p_link_id,p_scope,p_policy_version}'),
+  ('revoke_consent','{p_link_id,p_scope}'),
+  -- ricette (016)
+  ('submit_meal_for_review','{p_meal_id}'),('withdraw_meal','{p_meal_id}'),
+  ('review_meal','{p_meal_id,p_approve,p_notes}'),('publish_own_meal','{p_meal_id,p_visibility}'),
+  ('unpublish_own_meal','{p_meal_id}'),('log_suggested_meal','{p_meal_id,p_date,p_slot,p_servings}'),
+  ('save_meal_draft','{p_meal_id,p_data,p_items}'),('get_recipe_author','{p_meal_id}'),
+  ('get_recipes_for_me','{p_slot,p_restrictions,p_query}'),('get_meals_to_review','{}'),
+  -- vetrina (017)
+  ('search_nutritionists','{p_query,p_specialty,p_restriction,p_online}'),
+  -- chat (018)
+  ('start_conversation','{p_other}'),('send_message','{p_conversation,p_body,p_kind,p_payload}'),
+  ('send_invitation_message','{p_conversation}'),('mark_conversation_read','{p_conversation}'),
+  ('get_my_conversations','{}')
+),
+expected_table(name, privs) as (values
+  ('foods','SELECT,INSERT'),('profiles','SELECT,UPDATE'),('patient_settings','SELECT,UPDATE'),
+  ('nutritionist_details','SELECT,INSERT,UPDATE'),('professional_verifications','SELECT,INSERT'),
+  ('patient_links','SELECT'),('consents','SELECT'),('favorite_foods','SELECT,DELETE'),
+  ('personal_meals','SELECT,DELETE'),('macro_plan_targets','SELECT'),('notifications','SELECT'),
+  ('device_tokens','SELECT,INSERT,DELETE'),('suggested_meals','SELECT,INSERT,UPDATE,DELETE'),
+  ('suggested_meal_items','SELECT,INSERT,UPDATE,DELETE'),
+  ('nutritionist_plan_templates','SELECT,INSERT,UPDATE,DELETE'),
+  ('conversations','SELECT'),('messages','SELECT')
 ),
 fn as (
   select p.proname, p.oid, coalesce(p.proargnames, '{}') as argnames,
-         pg_get_function_identity_arguments(p.oid) as signature
+         pg_get_function_identity_arguments(p.oid) as sig
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'
 ),
-expected_table(name, privs) as (
-  values
-    ('foods', 'SELECT'),
-    ('profiles', 'SELECT,UPDATE'),
-    ('patient_settings', 'SELECT,UPDATE'),
-    ('nutritionist_details', 'SELECT,INSERT,UPDATE'),
-    ('professional_verifications', 'SELECT,INSERT'),
-    ('patient_links', 'SELECT'),
-    ('consents', 'SELECT'),
-    ('favorite_foods', 'SELECT,DELETE'),
-    ('personal_meals', 'SELECT'),
-    ('macro_plan_targets', 'SELECT'),
-    ('notifications', 'SELECT'),
-    ('device_tokens', 'SELECT,INSERT,DELETE'),
-    ('suggested_meals', 'SELECT,INSERT,UPDATE,DELETE'),
-    ('suggested_meal_items', 'SELECT,INSERT,UPDATE,DELETE'),
-    ('nutritionist_plan_templates', 'SELECT,INSERT,UPDATE,DELETE'),
-    ('conversations', 'SELECT'),
-    ('messages', 'SELECT')
-),
 checks(kind, name, detail, ok, problem) as (
-  -- RPC: esistenza, parametri passati dal frontend, EXECUTE
-  select
-    'rpc', e.name,
-    coalesce(f.signature, '(mancante)'),
-    f.oid is not null
-      and e.args::text[] <@ f.argnames
+  -- RPC: esistenza, parametri usati dal frontend, EXECUTE solo ad authenticated
+  select 'rpc', e.name, coalesce(f.sig, '(mancante)'),
+    f.oid is not null and e.args::text[] <@ f.argnames
       and has_function_privilege('authenticated', f.oid, 'execute')
       and not has_function_privilege('anon', f.oid, 'execute'),
-    case
-      when f.oid is null then 'funzione non trovata'
-      when not (e.args::text[] <@ f.argnames) then 'parametri diversi: attesi ' || e.args
-      when not has_function_privilege('authenticated', f.oid, 'execute') then 'manca EXECUTE per authenticated'
-      when has_function_privilege('anon', f.oid, 'execute') then 'anon può eseguirla'
-      else ''
-    end
-  from expected_rpc e
-  left join fn f on f.proname = e.name
+    case when f.oid is null then 'funzione non trovata'
+         when not (e.args::text[] <@ f.argnames) then 'parametri attesi: ' || e.args
+         when not has_function_privilege('authenticated', f.oid, 'execute') then 'manca EXECUTE per authenticated'
+         else 'anon puo eseguirla' end
+  from expected_rpc e left join fn f on f.proname = e.name
 
   union all
 
-  -- Tabelle: RLS attiva e privilegi per authenticated (INSERT/UPDATE anche
-  -- solo su alcune colonne: la migration 014 limita le colonne scrivibili)
-  select
-    'table', t.name, t.privs,
-    coalesce(c.relrowsecurity and bool_and((has_table_privilege('authenticated', c.oid, p.priv) or (p.priv in ('INSERT', 'UPDATE') and has_any_column_privilege('authenticated', c.oid, p.priv)))), false),
-    case
-      when c.oid is null then 'tabella non trovata'
-      when not c.relrowsecurity then 'RLS disattivata'
-      when not bool_and((has_table_privilege('authenticated', c.oid, p.priv) or (p.priv in ('INSERT', 'UPDATE') and has_any_column_privilege('authenticated', c.oid, p.priv)))) then 'privilegi mancanti per authenticated'
-      else ''
-    end
+  -- Tabelle: RLS attiva e privilegi (INSERT/UPDATE anche solo su alcune colonne)
+  select 'table', t.name, t.privs,
+    coalesce(c.relrowsecurity and bool_and(
+      has_table_privilege('authenticated', c.oid, p.priv)
+      or (p.priv in ('INSERT','UPDATE') and has_any_column_privilege('authenticated', c.oid, p.priv))), false),
+    case when c.oid is null then 'tabella non trovata'
+         when not c.relrowsecurity then 'RLS disattivata'
+         else 'privilegi mancanti per authenticated' end
   from expected_table t
   cross join lateral unnest(string_to_array(t.privs, ',')) as p(priv)
   left join pg_class c on c.relname = t.name and c.relnamespace = 'public'::regnamespace
@@ -116,8 +88,7 @@ checks(kind, name, detail, ok, problem) as (
   union all
 
   -- Policy: almeno una per ogni comando usato dal frontend
-  select
-    'policy', t.name || ' ' || p.priv,
+  select 'policy', t.name || ' ' || p.priv,
     coalesce((select string_agg(pp.policyname, ', ') from pg_policies pp
               where pp.schemaname = 'public' and pp.tablename = t.name and pp.cmd in (p.priv, 'ALL')), '(nessuna)'),
     exists (select 1 from pg_policies pp
@@ -128,41 +99,62 @@ checks(kind, name, detail, ok, problem) as (
 
   union all
 
-  -- Colonne scritte dal frontend in device_tokens
-  select
-    'column', 'device_tokens',
+  -- Funzioni usate dentro le policy: valutate come il chiamante, quindi
+  -- senza EXECUTE la lettura della tabella protetta va in errore
+  select 'policy-exec', p.proname, 'EXECUTE per authenticated',
+    has_function_privilege('authenticated', p.oid, 'execute'),
+    'senza EXECUTE la lettura della tabella protetta va in errore'
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname in ('can_review_meals_of', 'is_public_nutritionist', 'is_conversation_member',
+                      'is_my_nutritionist', 'has_active_link', 'is_admin')
+
+  union all
+
+  select 'realtime', x.t, 'publication supabase_realtime',
+    exists (select 1 from pg_publication_tables
+            where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = x.t),
+    'serve per notifiche e chat in tempo reale'
+  from (values ('notifications'), ('messages')) x(t)
+
+  union all
+
+  select 'column', 'device_tokens',
     (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns
-     where table_schema = 'public' and table_name = 'device_tokens'),
+      where table_schema = 'public' and table_name = 'device_tokens'),
     (select count(*) = 3 from information_schema.columns
-     where table_schema = 'public' and table_name = 'device_tokens' and column_name in ('user_id', 'token', 'platform')),
+      where table_schema = 'public' and table_name = 'device_tokens'
+        and column_name in ('user_id', 'token', 'platform')),
     'servono user_id, token, platform'
 
   union all
 
-  -- Enum usato dal frontend
-  select
-    'enum', 'meal_slot',
-    (select string_agg(e.enumlabel, ',' order by e.enumsortorder) from pg_enum e where e.enumtypid = 'public.meal_slot'::regtype),
-    (select string_agg(e.enumlabel, ',' order by e.enumsortorder) from pg_enum e where e.enumtypid = 'public.meal_slot'::regtype)
+  -- Le *_per_serving sono generate dal DB: meal_recalc non deve scriverle
+  select 'generated', 'suggested_meals',
+    (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns
+      where table_schema = 'public' and table_name = 'suggested_meals' and is_generated = 'ALWAYS'),
+    (select count(*) = 4 from information_schema.columns
+      where table_schema = 'public' and table_name = 'suggested_meals' and is_generated = 'ALWAYS'),
+    'attese 4 colonne per porzione generate'
+
+  union all
+
+  select 'enum', 'meal_slot',
+    (select string_agg(enumlabel, ',' order by enumsortorder) from pg_enum where enumtypid = 'public.meal_slot'::regtype),
+    (select string_agg(enumlabel, ',' order by enumsortorder) from pg_enum where enumtypid = 'public.meal_slot'::regtype)
       = 'breakfast,morning_snack,lunch,afternoon_snack,dinner,evening_snack',
-    ''
+    'valori diversi da quelli usati dall''app'
 
   union all
 
-  select
-    'realtime', 'notifications', 'publication supabase_realtime',
-    exists (select 1 from pg_publication_tables
-            where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notifications'),
-    'opzionale: badge notifiche in tempo reale'
-
-  union all
-
-  select
-    'realtime', 'messages', 'publication supabase_realtime',
-    exists (select 1 from pg_publication_tables
-            where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'messages'),
-    'serve per la chat in tempo reale'
+  -- Obiettivi ammessi per le ricette: l'app deve proporre esattamente questi
+  select 'tags', 'suggested_meals_goal_tags', pg_get_constraintdef(oid),
+    pg_get_constraintdef(oid) like '%high_protein%',
+    'l''app propone obiettivi non ammessi dal vincolo'
+  from pg_constraint where conname = 'suggested_meals_goal_tags_check'
 )
-select kind, name, detail, ok, case when ok then '' else problem end as problem
-from checks
-order by ok, kind, name;
+select (select count(*) from checks) as totale,
+       (select count(*) from checks where ok) as ok,
+       (select coalesce(json_agg(json_build_object(
+                 'kind', kind, 'name', name, 'detail', detail, 'problem', problem) order by kind, name), '[]'::json)
+          from checks where not ok) as problemi;
