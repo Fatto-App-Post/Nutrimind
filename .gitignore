@@ -37,3 +37,7 @@ Thumbs.db
 # Secret locali delle Edge Functions (mai committare)
 supabase/.env.secrets
 supabase/firebase-service-account.json
+
+# Configurazione locale di Claude Code
+.claude/
+.mcp.json

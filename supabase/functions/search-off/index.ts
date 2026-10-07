@@ -102,8 +102,12 @@ serve(async (req: Request) => {
     }
 
     const { baseUri, headers } = offConfig();
-    const url = `${baseUri}/api/v2/search?search_terms=${encodeURIComponent(query)}` +
-      `&fields=${FIELDS}&page_size=${limit}&sort_by=popularity_key`;
+    // Ricerca testuale: /api/v2/search ignora search_terms (restituisce
+    // prodotti casuali su tutto il database), quindi serve cgi/search.pl.
+    // È l'unico endpoint full-text disponibile anche sullo staging .net;
+    // l'alternativa (search.openfoodfacts.org) esiste solo in produzione.
+    const url = `${baseUri}/cgi/search.pl?search_terms=${encodeURIComponent(query)}` +
+      `&search_simple=1&action=process&json=1&page_size=${limit}&fields=${FIELDS}`;
 
     let res: Response;
     try {
