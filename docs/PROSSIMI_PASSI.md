@@ -20,27 +20,35 @@ soli valori nutrizionali, Progressi, Profilo, vetrina e chat.
 vetrina, piani di base, ricette e inviti. Il tema chiaro/scuro cambia su
 tutte le schermate, comprese quelle aperte sopra le altre.
 
-**Non provato cliccando**: tutto ciò che richiede un paziente collegato,
-il pannello di amministrazione (manca la 025) e le notifiche push. Le
-funzioni nuove del database sono però state eseguite in sola lettura,
-con i parametri veri, prima di consegnarle.
+**Percorso completo fra i due ruoli**, con le utenze del punto 1.2:
+invito generato, riscattato con i tre consensi, paziente che compare
+nella lista del professionista; piano macro con obiettivi per pasto e
+istruzioni; consiglio mirato su un alimento con nota. Dal lato paziente,
+sullo schermo:
+
+- giornata `236 / 2054 kcal`, `P 2/145 g`, `C 5/220 g`, `G 23/66 g`;
+- `Piano "Ricomposizione · ottobre" del nutrizionista` con le istruzioni
+  sotto, dove il paziente guarda i numeri ogni giorno;
+- colazione `P 2/30 g · C 5/55 g · G 23/12 g`, `236 / 448 kcal`,
+  `-212 kcal`; i pasti ancora vuoti mostrano il proprio obiettivo
+  (`Obiettivo: P 45 · C 80 · G 20 g`) invece di "Nessun alimento";
+- `Consigliati per te` con l'alimento, l'autore e la nota;
+- campanella con il contatore delle notifiche a 1.
+
+**Non provato cliccando**: il pannello di amministrazione (serve un
+accesso come amministratore: l'unica utenza con quel ruolo è
+`pasquinapoli1@gmail.com`, di cui non ho la password) e le notifiche
+push, che non partono ancora (punto 2.2).
 
 ---
 
 ## 1. Da applicare (serve un tuo passaggio)
 
-### 1.1 Migration 026 — **S**
-Nel SQL Editor, poi `supabase/verify_frontend_contract.sql`.
-
-| Migration | Cosa porta |
-|---|---|
-| `026_fix_plan_targets_generated.sql` | **Correzione**: la 023 scriveva `macro_plan_targets.kcal_estimated`, che è una colonna generata. Nessun piano macro si poteva salvare (errore 428C9), né dal professionista né in autogestione |
-
-È venuto fuori provando per la prima volta a creare un piano con un
-paziente collegato: è lo stesso errore in cui era incappata
-`meal_recalc` con le colonne `*_per_serving`. Da qui il controllo nuovo
-nello script di verifica, che elenca le colonne generate delle due
-tabelle su cui ci siamo già sbagliati.
+### 1.1 Tutte le migration sono applicate
+Da 014 a 026, nessuna in sospeso. Dopo ogni migration conviene eseguire
+`supabase/verify_frontend_contract.sql`: lo script ora controlla anche le
+colonne generate delle due tabelle su cui ci siamo sbagliati, perché è
+un errore che si vede solo a runtime, quando qualcuno prova a salvare.
 
 ### 1.2 Utenze di prova su DEV
 Le due password fornite non funzionavano (400 da
