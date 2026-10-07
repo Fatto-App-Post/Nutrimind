@@ -3,7 +3,7 @@
 --
 -- Un'unica query: restituisce il totale dei controlli, quanti passano e
 -- l'elenco dei soli problemi. Se `problemi` è [] il database è allineato
--- all'app (migration 014-019).
+-- all'app (migration 014-022).
 -- =====================================================================
 
 with expected_rpc(name, args) as (values
@@ -152,6 +152,49 @@ checks(kind, name, detail, ok, problem) as (
     pg_get_constraintdef(oid) like '%high_protein%',
     'l''app propone obiettivi non ammessi dal vincolo'
   from pg_constraint where conname = 'suggested_meals_goal_tags_check'
+
+  union all
+
+  -- 021: il ruolo scelto alla registrazione deve finire nel profilo
+  select 'signup', 'handle_new_user', 'legge raw_user_meta_data',
+    exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = 'handle_new_user'
+               and pg_get_functiondef(p.oid) like '%raw_user_meta_data%'
+               and pg_get_functiondef(p.oid) like '%nutritionist%'),
+    'chi si registra come nutrizionista diventa paziente: eseguire la 021'
+
+  union all
+
+  select 'signup', 'on_auth_user_created', 'trigger su auth.users',
+    exists (select 1 from pg_trigger
+             where tgname = 'on_auth_user_created'
+               and tgrelid = 'auth.users'::regclass and not tgisinternal),
+    'senza il trigger la registrazione non crea il profilo'
+
+  union all
+
+  select 'signup', 'utenze senza profilo',
+    (select count(*)::text from auth.users u
+      where not exists (select 1 from public.profiles p where p.id = u.id)),
+    not exists (select 1 from auth.users u
+                 where not exists (select 1 from public.profiles p where p.id = u.id)),
+    'ogni scrittura di quell''utente va in errore di chiave esterna'
+
+  union all
+
+  -- 022: la ricerca testuale deve tollerare gli errori di battitura
+  select 'search', 'search_foods', 'usa la somiglianza di pg_trgm',
+    exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = 'search_foods'
+               and pg_get_functiondef(p.oid) like '%word_similarity%'),
+    'solo ilike: "mozarella" non trova "mozzarella"'
+
+  union all
+
+  select 'search', 'foods_name_trgm_idx', 'indice GIN su name_search',
+    exists (select 1 from pg_class i join pg_index ix on ix.indexrelid = i.oid
+             where ix.indrelid = 'public.foods'::regclass and i.relname = 'foods_name_trgm_idx'),
+    'senza indice la ricerca per somiglianza scansiona tutto il catalogo'
 )
 select (select count(*) from checks) as totale,
        (select count(*) from checks where ok) as ok,

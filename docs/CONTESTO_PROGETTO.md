@@ -46,7 +46,10 @@ di integrazione, `main` la produzione.
 - Ricerca alimenti con **filtri nutrizionali** (minimo e massimo su
   proteine, carboidrati, grassi, calorie per 100 g, più ordinamento). Si
   può cercare anche con i soli filtri. Quando il catalogo locale dà pochi
-  risultati, l'app interroga automaticamente il catalogo esteso.
+  risultati, l'app interroga automaticamente il catalogo esteso. Dalla
+  migration 022 la ricerca tollera gli errori di battitura. C'è una sola
+  schermata di ricerca in tutta l'app (`search_food_screen.dart`): la usa
+  sia il diario sia la scheda Catalogo.
 - Alimento personale se un prodotto non esiste; preferiti; pasti salvati.
 - Ricette proprie, inviate al proprio nutrizionista per la verifica.
 - Progressi: aderenza, giorni registrati, serie, kcal giornaliere
@@ -147,6 +150,8 @@ Quelle da 014 in poi sono **rieseguibili** senza errori.
 | 018 | Chat: conversazioni, messaggi, notifiche, tempo reale |
 | 019 | Ricerca alimenti per valori nutrizionali |
 | 020 | Rimuove il richiamo a una funzione inesistente in `search_foods` e `get_food_by_barcode` |
+| 021 | Il ruolo scelto alla registrazione finisce nel profilo; crea i profili mancanti |
+| 022 | Ricerca alimenti per somiglianza (pg_trgm) e ordinata per pertinenza |
 
 **Lezione imparata:** il SQL Editor annulla l'intero script al primo
 errore. Conviene tenere le migration piccole e divise per area, e
@@ -154,7 +159,9 @@ verificarle una per una.
 
 Dopo ogni migration: eseguire `supabase/verify_frontend_contract.sql`.
 Restituisce il totale dei controlli, quanti passano e il solo elenco dei
-problemi. Al 7 ottobre 2026 su DEV: **107 su 107**.
+problemi. Lo script copre **112** controlli; con le migration fino alla
+020 applicate ne passano 109, e i tre che restano sono esattamente
+quelli che sistemano la 021 e la 022.
 
 ---
 
@@ -165,7 +172,7 @@ Tutte attive su DEV. Il codice sta in `supabase/functions/`.
 | Funzione | A cosa serve | Note |
 |---|---|---|
 | `search-off` | Ricerca nel catalogo esteso | Normalizza i campi come la tabella `foods`. Usa `cgi/search.pl`: `/api/v2/search` **ignora la ricerca testuale** e restituisce prodotti casuali |
-| `import-off-barcode` | Importa un prodotto per codice a barre | Scrive con privilegi di servizio dopo aver validato l'utente |
+| `import-off-barcode` | Importa un prodotto per codice a barre | Scrive con privilegi di servizio dopo aver validato l'utente. Preferisce i campi italiani e traduce gli allergeni dai tag |
 | `sync-off-batch` | Sincronizzazione in blocco (solo admin, o job con chiave di servizio) | Riscritta: scriveva un valore di `source` inesistente e marcava gli import come verificati. Mai usata finora |
 | `send-notification` | Push tramite Firebase | API FCM HTTP v1 con il secret `FIREBASE_SERVICE_ACCOUNT`. La vecchia API con "server key" è stata dismessa da Google a luglio 2024 |
 | `send-email` | Email trasazionali | Richiede Resend, non ancora configurato |
@@ -192,6 +199,19 @@ contiene URL e chiave pubblica di Supabase e i valori `FIREBASE_*`.
 **Mai** la chiave segreta: l'app si rifiuta di partire se la riceve.
 
 Per il push sul web serve anche `web/firebase-config.js`.
+
+Per provare l'app in un browser senza toccare il codice:
+
+```bash
+flutter build web --dart-define-from-file=env/dev.json --dart-define=ENABLE_SEMANTICS=true
+```
+
+`ENABLE_SEMANTICS` tiene acceso l'albero di accessibilità, che Flutter
+sul web costruisce solo dopo che l'utente ha premuto il pulsante
+nascosto "Enable accessibility". Serve ai test automatici del browser:
+senza di esso la pagina è una sola tela e non si può né leggere né
+toccare niente. **Non va usato in produzione**: tenere l'albero
+aggiornato ha un costo.
 
 ### Firebase
 
@@ -226,6 +246,20 @@ sanitari richiede un consenso a parte.
 
 ---
 
+## 7bis. Due cose da sapere sullo stato dei dati
+
+- **Il catalogo alimenti è praticamente vuoto.** Su DEV `public.foods`
+  conteneva zero righe: ogni ricerca finiva sul catalogo esteso e la
+  ricerca per valori nutrizionali non poteva restituire niente. Vedere
+  il punto 2.1 di [PROSSIMI_PASSI.md](PROSSIMI_PASSI.md).
+- **L'app è metà chiara e metà scura.** Diario, ricerca alimenti e
+  filtri usano `#101817`; le altre diciassette schermate `#FAFAFA`; e
+  `buildTheme()` genera un terzo schema, chiaro. La tavolozza è ripetuta
+  in venti file. È una decisione di prodotto da prendere: punto 4 dei
+  prossimi passi.
+
+---
+
 ## 8. Come lavorare su questo progetto
 
 1. **Prima di scrivere codice, guardare il database reale**, non i
@@ -237,4 +271,17 @@ sanitari richiede un consenso a parte.
    (`lib/core/supabase.dart`), servizi in `lib/core/*_service.dart`,
    errori normalizzati in `lib/core/app_error.dart` (mai mostrare
    all'utente messaggi SQL o tecnici).
-5. Controllare sempre con `flutter analyze` prima di considerare finito.
+5. Controllare sempre con `flutter analyze` e `flutter test` prima di
+   considerare finito. I test stanno in `nutrimind-frontend/test/` e
+   servono soprattutto a tenere i modelli allineati agli enum e ai
+   vincoli del database.
+6. La CI dei due repository fa questo:
+   - backend: `node scripts/check-sql.mjs` (parser di PostgreSQL su ogni
+     `.sql`) e `node scripts/check-functions.mjs` (esbuild su ogni Edge
+     Function). Si possono eseguire anche a mano.
+   - frontend: `flutter analyze`, `flutter test`, compilazione web con
+     `env/dev.example.json`.
+7. **Si può verificare una funzione SQL senza applicarla**: basta
+   riscriverne il corpo come `SELECT` con i parametri come letterali ed
+   eseguirlo in sola lettura. È così che si è controllata la 022 prima
+   di consegnarla.

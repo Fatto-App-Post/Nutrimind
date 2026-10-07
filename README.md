@@ -21,11 +21,23 @@ Edge Functions di Supabase. L'app Flutter sta in
 ```
 migrations/          schema iniziale (001-003b)
 supabase/
-  migrations/        funzioni e funzionalità successive (011-020)
+  migrations/        funzioni e funzionalità successive (011-022)
   functions/         Edge Functions (Deno)
   verify_frontend_contract.sql   verifica che il DB sia allineato all'app
+scripts/             controlli eseguiti dalla CI (SQL e funzioni)
 docs/
 ```
+
+## Controlli locali
+
+```bash
+npm install --no-save libpg-query@17 esbuild@0.25.0
+node scripts/check-sql.mjs        # ogni .sql è sintatticamente valido
+node scripts/check-functions.mjs  # ogni Edge Function è TypeScript valido
+```
+
+Sono gli stessi due controlli che esegue la CI. Non applicano niente al
+database e non pubblicano niente.
 
 ## Ambienti
 

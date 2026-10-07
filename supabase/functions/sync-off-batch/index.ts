@@ -28,6 +28,15 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/// Porzione in italiano quando il catalogo esterno usa la formula
+/// inglese "1 serving (47.5 g)"; le porzioni descrittive restano.
+const servingLabel = (raw: unknown, servingG: number | null): string | null => {
+  const label = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 60) : null;
+  if (label === null || /^\s*\d*[.,]?\d*\s*servings?\b/i.test(label)) {
+    return servingG === null ? null : `Porzione ${servingG} g`;
+  }
+  return label;
+};
 const num = (v: unknown): number | null => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
@@ -162,7 +171,7 @@ serve(async (req: Request) => {
             saturated_fat_g: num(n['saturated-fat_100g']),
             salt_g: num(n.salt_100g),
             serving_g: num(product.serving_quantity),
-            serving_label: (product.serving_size ?? null) || null,
+            serving_label: servingLabel(product.serving_size, num(product.serving_quantity)),
             quantity_text: (product.quantity ?? null) || null,
             nutriscore_grade: (product.nutriscore_grade ?? null) || null,
             nova_group: num(product.nova_group),

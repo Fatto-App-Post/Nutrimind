@@ -110,6 +110,61 @@ const text = (v: unknown, max?: number): string | null => {
 };
 const round = (v: number | null, digits: number) => (v === null ? null : Number(v.toFixed(digits)));
 
+// I nomi dei 14 allergeni obbligatori nell'UE. Il catalogo esterno li
+// espone come tag canonici ("en:milk"), indipendenti dalla lingua in cui
+// il prodotto è stato inserito: tradurli dai tag è l'unico modo
+// affidabile di mostrarli in italiano. Il campo di testo libero, invece,
+// resta nella lingua di chi ha inserito il prodotto (per la Nutella si
+// leggeva "lait, fruits à coque, soja").
+const ALLERGEN_IT: Record<string, string> = {
+  gluten: 'glutine',
+  crustaceans: 'crostacei',
+  eggs: 'uova',
+  fish: 'pesce',
+  peanuts: 'arachidi',
+  soybeans: 'soia',
+  milk: 'latte',
+  nuts: 'frutta a guscio',
+  celery: 'sedano',
+  mustard: 'senape',
+  'sesame-seeds': 'sesamo',
+  sulphur: 'solfiti',
+  'sulphur-dioxide-and-sulphites': 'solfiti',
+  lupin: 'lupini',
+  molluscs: 'molluschi',
+};
+
+/// Allergeni in italiano a partire dai tag; se non ci sono tag si usa il
+/// testo libero, preferendo la versione italiana quando esiste.
+function allergenText(tags: unknown, localized: unknown, fallback: unknown): string | null {
+  const list = Array.isArray(tags) ? tags.filter((t): t is string => typeof t === 'string') : [];
+  const names = [
+    ...new Set(
+      list.map((tag) => {
+        const slug = tag.includes(':') ? tag.slice(tag.indexOf(':') + 1) : tag;
+        // Un tag "it:..." è già in italiano: si usa così, con i trattini
+        // sostituiti dagli spazi.
+        return ALLERGEN_IT[slug] ?? slug.replace(/-/g, ' ');
+      }),
+    ),
+  ];
+  if (names.length > 0) return names.join(', ');
+  return text(localized) ?? text(fallback);
+}
+
+/// Il catalogo esterno scrive spesso la porzione in inglese
+/// ("1 serving (47.5 g)"): in quel caso la si riscrive in italiano usando
+/// la quantità già normalizzata. Le porzioni descrittive ("1 vasetto da
+/// 125 g") si lasciano come sono.
+function servingLabel(raw: unknown, servingG: number | null): string | null {
+  const label = text(raw, 60);
+  if (label === null) return servingG === null ? null : `Porzione ${servingG} g`;
+  if (/^\s*\d*[.,]?\d*\s*servings?\b/i.test(label)) {
+    return servingG === null ? null : `Porzione ${servingG} g`;
+  }
+  return label;
+}
+
 function mapProduct(barcode: string, product: any, status: number, statusVerbose: string | null, payloadHash: string) {
   const n = product.nutriments ?? {};
 
@@ -157,7 +212,10 @@ function mapProduct(barcode: string, product: any, status: number, statusVerbose
     saturated_fat_g: round(inRange(num(n['saturated-fat_100g']), 0, 100), 2),
     salt_g: round(inRange(num(n.salt_100g), 0, 100), 3),
     serving_g: servingG !== null && servingG > 0 && servingG <= 5000 ? round(servingG, 2) : null,
-    serving_label: text(product.serving_size, 60),
+    serving_label: servingLabel(
+      product.serving_size,
+      servingG !== null && servingG > 0 && servingG <= 5000 ? round(servingG, 2) : null,
+    ),
     is_active: true,
     external_code: code,
     external_api_version: 'v2',
@@ -171,9 +229,9 @@ function mapProduct(barcode: string, product: any, status: number, statusVerbose
     serving_size_text: text(product.serving_size),
     product_quantity: num(product.product_quantity),
     product_quantity_unit: text(product.product_quantity_unit),
-    ingredients_text: text(product.ingredients_text),
-    allergens_text: text(product.allergens),
-    traces_text: text(product.traces),
+    ingredients_text: text(product.ingredients_text_it) ?? text(product.ingredients_text),
+    allergens_text: allergenText(product.allergens_tags, product.allergens_text_it, product.allergens),
+    traces_text: allergenText(product.traces_tags, product.traces_text_it, product.traces),
     labels_text: text(product.labels),
     categories_text: text(product.categories),
     main_category: text(product.main_category),
