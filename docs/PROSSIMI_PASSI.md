@@ -29,34 +29,49 @@ con i parametri veri, prima di consegnarle.
 
 ## 1. Da applicare (serve un tuo passaggio)
 
-### 1.1 Migration 025 — **S**
+### 1.1 Migration 026 — **S**
 Nel SQL Editor, poi `supabase/verify_frontend_contract.sql`.
 
 | Migration | Cosa porta |
 |---|---|
-| `025_food_review_and_admin_overview.sql` | Coda degli alimenti da verificare, quadro per l'amministratore, esportazione dei dati completa |
+| `026_fix_plan_targets_generated.sql` | **Correzione**: la 023 scriveva `macro_plan_targets.kcal_estimated`, che è una colonna generata. Nessun piano macro si poteva salvare (errore 428C9), né dal professionista né in autogestione |
 
-`review_food` esisteva dalla prima migration e **nessuna schermata la
-chiamava**: tutto ciò che creavano pazienti e professionisti restava
-`unverified` per sempre. Mancava solo l'elenco di quelli in attesa.
+È venuto fuori provando per la prima volta a creare un piano con un
+paziente collegato: è lo stesso errore in cui era incappata
+`meal_recalc` con le colonne `*_per_serving`. Da qui il controllo nuovo
+nello script di verifica, che elenca le colonne generate delle due
+tabelle su cui ci siamo già sbagliati.
 
-### 1.2 Password delle utenze di prova — **S**
-Nessuna delle due password che mi hai passato funziona, per nessuna
-delle due utenze: `/auth/v1/token?grant_type=password` risponde 400.
-Su `pasqualemonda03@gmail.com` la password non è stata cambiata dal 4
-ottobre (`auth.users.updated_at` è ancora quella data), quindi è una
-terza, che non conosco.
+### 1.2 Utenze di prova su DEV
+Le due password fornite non funzionavano (400 da
+`/auth/v1/token?grant_type=password`), così le utenze di prova sono state
+create dalla registrazione pubblica dell'app. **Da cancellare prima di
+andare in produzione.**
 
-Finché non ho un accesso valido non posso provare cliccando: resta tutto
-verificabile solo in lettura sul database. Si risolve in un minuto da
-Dashboard → Authentication → Users → *utente* → Reset password.
+| Utenza | Ruolo | Password |
+|---|---|---|
+| `paziente.prova@example.com` | paziente | `NutriMind2026!` |
+| `nutri.prova@example.com` | professionista (non abilitato) | `NutriMind2026!` |
 
-### 1.3 Collegare un paziente a un professionista — **S**
-Serve per provare piano macro, consigli mirati, commenti sul diario,
-aderenza e chat: senza un collegamento attivo quelle RPC rispondono 403,
-ed è corretto che lo facciano. Dal profilo del professionista, "Invita
-pazienti" genera un codice; un secondo accesso come paziente lo
-riscatta.
+Sono collegate fra loro (invito riscattato con i tre consensi) e il
+professionista ha già mandato un consiglio mirato al paziente. Il domìnio
+`example.com` è riservato dalla RFC 2606 e non riceve posta: sono utenze
+che non possono recuperare la password, e va bene così su DEV.
+
+Nota: su questo progetto la conferma via email è **disattivata**, quindi
+chi si registra entra subito. In produzione va riattivata.
+
+### 1.3 Automazione dell'interfaccia: limite noto
+Le prove cliccando passano per eventi sintetici sull'albero di
+accessibilità. Funzionano su `FilledButton`, `IconButton`, `ListTile` e
+`InkWell` di prima generazione, **non** su `TextButton` e sulle schede
+dei pasti: lì l'evento arriva ma il gesto non viene riconosciuto. Per
+quei percorsi si verificano le RPC con la sessione dell'utente (è la
+stessa chiamata che fa l'app) e si guarda il risultato a schermo.
+
+Un `flutter drive` con `integration_test` risolverebbe alla radice:
+guida l'app dall'interno, senza eventi sintetici. È il modo giusto di
+rendere ripetibili queste prove.
 
 ---
 

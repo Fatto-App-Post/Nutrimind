@@ -126,6 +126,9 @@ del resto dello script.
   `carbs_g_per_serving`, `fat_g_per_serving` sono **generate** come
   `round(totale / servings, 2)`: **non vanno scritte**, si aggiornano da
   sole. `meal_recalc` aggiorna solo i totali.
+- `macro_plan_targets.kcal_estimated` è **generata** come
+  `protein_g*4 + carbs_g*4 + fat_g*9`: non va scritta. La 023 lo faceva
+  e nessun piano macro si poteva salvare (428C9); corretto dalla 026.
 - `foods.trust_level` è generata da `verification` e `source`.
 - `foods.name_search` la riempie un trigger (nome + marca senza accenti).
 - `diary_entries`: kcal e macro li calcola **sempre il trigger**
@@ -172,6 +175,7 @@ Quelle da 014 in poi sono **rieseguibili** senza errori.
 | 023 | Piani con istruzioni, autogestione del paziente, consigli mirati a un singolo paziente |
 | 024 | Approvazione delle verifiche professionali dall'app, senza SQL |
 | 025 | Coda degli alimenti da verificare, quadro per l'amministratore, esportazione dati completa |
+| 026 | Correzione della 023: `kcal_estimated` è generata e non va scritta |
 
 **Lezione imparata:** il SQL Editor annulla l'intero script al primo
 errore. Conviene tenere le migration piccole e divise per area, e

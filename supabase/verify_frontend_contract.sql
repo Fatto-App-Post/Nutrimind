@@ -144,13 +144,25 @@ checks(kind, name, detail, ok, problem) as (
 
   union all
 
-  -- Le *_per_serving sono generate dal DB: meal_recalc non deve scriverle
+  -- Colonne generate dal database: scriverle da una funzione fa
+  -- fallire ogni INSERT con 428C9. Ci siamo sbagliati due volte, su
+  -- suggested_meals e su macro_plan_targets: meglio tenerle elencate.
   select 'generated', 'suggested_meals',
     (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns
       where table_schema = 'public' and table_name = 'suggested_meals' and is_generated = 'ALWAYS'),
     (select count(*) = 4 from information_schema.columns
       where table_schema = 'public' and table_name = 'suggested_meals' and is_generated = 'ALWAYS'),
     'attese 4 colonne per porzione generate'
+  union all
+
+  select 'generated', 'macro_plan_targets',
+    (select coalesce(string_agg(column_name, ',' order by ordinal_position), '(nessuna)')
+       from information_schema.columns
+      where table_schema = 'public' and table_name = 'macro_plan_targets' and is_generated = 'ALWAYS'),
+    (select count(*) = 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'macro_plan_targets'
+        and is_generated = 'ALWAYS' and column_name = 'kcal_estimated'),
+    'kcal_estimated e generata: start_macro_plan non deve scriverla'
 
   union all
 
