@@ -52,6 +52,11 @@ di integrazione, `main` la produzione.
   sia il diario sia la scheda Catalogo.
 - Alimento personale se un prodotto non esiste; preferiti; pasti salvati.
 - Ricette proprie, inviate al proprio nutrizionista per la verifica.
+- **Autogestione**: chi non ha un professionista collegato si imposta da
+  solo gli obiettivi, dallo stesso editor che usa il professionista. Con
+  un collegamento attivo il piano torna in mano a lui e il database
+  rifiuta la scrittura del paziente (`plan_managed_by_nutritionist`):
+  altrimenti l'aderenza calcolata sul piano non vorrebbe dire niente.
 - Progressi: aderenza, giorni registrati, serie, kcal giornaliere
   rispetto all'obiettivo, medie dei macro (7 o 30 giorni).
 - "Trova un nutrizionista": vetrina dei professionisti verificati con
@@ -60,7 +65,15 @@ di integrazione, `main` la produzione.
 
 **Professionista** — quattro schede: Pazienti, Messaggi, Ricette, Profilo.
 - Pazienti ordinati per priorità, con aderenza, diario e commenti.
-- Piani macro per paziente; commenti sul diario.
+- Piani macro per paziente: si parte da calorie e ripartizione dei macro,
+  si correggono i grammi pasto per pasto e si scrivono le **istruzioni**
+  su come seguirli (il paziente le legge nel diario, sopra gli
+  obiettivi).
+- **Consigli mirati**: una ricetta o un alimento scelti per *quel*
+  paziente, con una nota. Il paziente li trova in "Consigliati per te"
+  quando aggiunge un pasto. Restano distinti dalle ricette pubblicate,
+  che valgono per tutti.
+- Con il ruolo `admin`, l'approvazione delle verifiche professionali.
 - Ricette pubblicate senza revisione (per tutti o solo per i propri
   pazienti) e coda di verifica delle ricette dei pazienti.
 - Profilo pubblico (vetrina), piani alimentari "di base", codici invito.
@@ -152,6 +165,8 @@ Quelle da 014 in poi sono **rieseguibili** senza errori.
 | 020 | Rimuove il richiamo a una funzione inesistente in `search_foods` e `get_food_by_barcode` |
 | 021 | Il ruolo scelto alla registrazione finisce nel profilo; crea i profili mancanti |
 | 022 | Ricerca alimenti per somiglianza (pg_trgm) e ordinata per pertinenza |
+| 023 | Piani con istruzioni, autogestione del paziente, consigli mirati a un singolo paziente |
+| 024 | Approvazione delle verifiche professionali dall'app, senza SQL |
 
 **Lezione imparata:** il SQL Editor annulla l'intero script al primo
 errore. Conviene tenere le migration piccole e divise per area, e
@@ -240,9 +255,14 @@ sanitari richiede un consenso a parte.
    aggiornate nei secret di GitHub Actions.
 2. **Chiave privata Firebase** incollata in chat durante lo sviluppo:
    conviene generarne una nuova e sostituire il secret.
-3. Non esiste un pannello admin: le verifiche professionali si approvano
-   a mano con `update public.profiles set professional_verified = true
-   where id = '<uuid>'`.
+3. Le verifiche professionali si approvano dall'app (migration 024), ma
+   **il primo amministratore lo si nomina a mano**, ed è giusto che resti
+   l'unica cosa fuori dall'app:
+
+   ```sql
+   update public.profiles set role = 'admin'
+    where id = (select id from auth.users where email = 'tu@esempio.it');
+   ```
 
 ---
 
@@ -252,11 +272,17 @@ sanitari richiede un consenso a parte.
   conteneva zero righe: ogni ricerca finiva sul catalogo esteso e la
   ricerca per valori nutrizionali non poteva restituire niente. Vedere
   il punto 2.1 di [PROSSIMI_PASSI.md](PROSSIMI_PASSI.md).
-- **L'app è metà chiara e metà scura.** Diario, ricerca alimenti e
-  filtri usano `#101817`; le altre diciassette schermate `#FAFAFA`; e
-  `buildTheme()` genera un terzo schema, chiaro. La tavolozza è ripetuta
-  in venti file. È una decisione di prodotto da prendere: punto 4 dei
-  prossimi passi.
+- **Tema chiaro o scuro, scelto dall'utente** col pulsante sole/luna nel
+  profilo (prima metà app era chiara e metà scura). La tavolozza sta solo
+  in `core/theme.dart` — `lightPalette` e `darkPalette` — e la scelta si
+  salva sul dispositivo. Due regole da rispettare scrivendo schermate:
+  1. i colori si leggono **dentro** `build`, mai salvati in un campo
+     dello `State`;
+  2. ogni `build` che li usa chiama `context.watchTheme()` come prima
+     istruzione. Senza, al cambio di tema quella schermata resta dei
+     colori vecchi: Flutter salta la ricostruzione di un widget quando il
+     genitore gli passa la stessa istanza `const`, e la dipendenza
+     esplicita dal tema è l'unico modo per aggirare la cosa.
 
 ---
 
