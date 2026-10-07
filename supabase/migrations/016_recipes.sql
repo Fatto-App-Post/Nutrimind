@@ -71,12 +71,10 @@ begin
       add constraint suggested_meals_image_url_check
       check (image_url is null or (image_url ~* '^https://' and char_length(image_url) <= 500));
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'suggested_meals_text_len_check') then
+  -- title (3..100) e description (<= 2000) hanno già i loro vincoli
+  if not exists (select 1 from pg_constraint where conname = 'suggested_meals_instructions_check') then
     alter table public.suggested_meals
-      add constraint suggested_meals_text_len_check
-      check (char_length(title) between 1 and 120
-             and char_length(coalesce(description, '')) <= 2000
-             and char_length(coalesce(instructions, '')) <= 8000);
+      add constraint suggested_meals_instructions_check check (char_length(instructions) <= 8000);
   end if;
   if not exists (select 1 from pg_constraint where conname = 'suggested_meals_prep_check') then
     alter table public.suggested_meals
@@ -96,8 +94,11 @@ using (
 );
 
 -- ---------------------------------------------------------------------
--- Totali e valori per porzione
+-- Totali
 -- ---------------------------------------------------------------------
+-- Le colonne *_per_serving sono generate dal database come
+-- round(totale / servings, 2): si aggiornano da sole quando cambiano i
+-- totali o le porzioni, e non possono essere scritte.
 create or replace function public.meal_recalc(p_meal uuid)
 returns void
 language sql
@@ -105,14 +106,10 @@ security definer
 set search_path = ''
 as $$
   update public.suggested_meals m
-     set kcal_total            = round(t.k, 2),
-         protein_g_total       = round(t.p, 2),
-         carbs_g_total         = round(t.c, 2),
-         fat_g_total           = round(t.f, 2),
-         kcal_per_serving      = round(t.k / greatest(m.servings, 1), 2),
-         protein_g_per_serving = round(t.p / greatest(m.servings, 1), 2),
-         carbs_g_per_serving   = round(t.c / greatest(m.servings, 1), 2),
-         fat_g_per_serving     = round(t.f / greatest(m.servings, 1), 2)
+     set kcal_total      = round(t.k, 2),
+         protein_g_total = round(t.p, 2),
+         carbs_g_total   = round(t.c, 2),
+         fat_g_total     = round(t.f, 2)
     from (select coalesce(sum(f.kcal      * i.grams / 100), 0) as k,
                  coalesce(sum(f.protein_g * i.grams / 100), 0) as p,
                  coalesce(sum(f.carbs_g   * i.grams / 100), 0) as c,
@@ -123,23 +120,21 @@ as $$
    where m.id = p_meal
 $$;
 
--- Cambio porzioni: ricalcola i valori per porzione
-create or replace function public.meal_servings_changed()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
+-- Trigger non più necessario: con le colonne generate il cambio di
+-- porzioni non richiede un ricalcolo esplicito.
+drop trigger if exists meals_servings_changed on public.suggested_meals;
+drop function if exists public.meal_servings_changed();
+
+-- servings compare al denominatore delle colonne generate: zero darebbe
+-- un errore di divisione
+do $$
 begin
-  perform public.meal_recalc(new.id);
-  return null;
+  if not exists (select 1 from pg_constraint where conname = 'suggested_meals_servings_check') then
+    alter table public.suggested_meals
+      add constraint suggested_meals_servings_check check (servings between 1 and 50);
+  end if;
 end;
 $$;
-
-drop trigger if exists meals_servings_changed on public.suggested_meals;
-create trigger meals_servings_changed after update of servings on public.suggested_meals
-for each row when (old.servings is distinct from new.servings)
-execute function public.meal_servings_changed();
 
 -- Alimenti utilizzabili in una ricetta: attivi e non rifiutati
 create or replace function public.meal_has_unusable_foods(p_meal uuid)
@@ -249,9 +244,12 @@ begin
     raise exception 'unusable_foods_in_meal' using errcode = '23514';
   end if;
 
+  -- reviewed_by resta nullo: il vincolo meals_reviewer_not_proposer vieta
+  -- che chi revisiona sia anche l'autore. reviewed_at e published_at
+  -- servono invece a meals_approved_stamped.
   update public.suggested_meals
      set status = 'approved', visibility = p_visibility,
-         reviewed_by = v_uid, reviewed_at = now(), review_notes = null, published_at = now()
+         reviewed_by = null, reviewed_at = now(), review_notes = null, published_at = now()
    where id = p_meal_id;
 end;
 $$;
