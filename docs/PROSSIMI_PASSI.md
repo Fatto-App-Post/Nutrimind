@@ -8,42 +8,55 @@ Legenda impegno: **S** poche ore · **M** 1-2 giorni · **L** più giorni.
 
 ---
 
+## 0. Cosa è stato provato davvero
+
+**Come paziente** (prima che l'utenza diventasse professionista):
+accesso, diario, ricerca testuale, passaggio al catalogo esteso, import
+del prodotto, dettaglio con tabella nutrizionale, aggiunta al diario con
+ricalcolo dei macro, import di un codice a barre digitato, ricerca per
+soli valori nutrizionali, Progressi, Profilo, vetrina e chat.
+
+**Come professionista**: le quattro schede si aprono e il profilo mostra
+vetrina, piani di base, ricette e inviti. Il tema chiaro/scuro cambia su
+tutte le schermate, comprese quelle aperte sopra le altre.
+
+**Non provato cliccando**: tutto ciò che richiede un paziente collegato,
+il pannello di amministrazione (manca la 025) e le notifiche push. Le
+funzioni nuove del database sono però state eseguite in sola lettura,
+con i parametri veri, prima di consegnarle.
+
+---
+
 ## 1. Da applicare (serve un tuo passaggio)
 
-### 1.1 Migration 023 e 024 — **S**
-Nel SQL Editor, una per volta, poi
-`supabase/verify_frontend_contract.sql`.
+### 1.1 Migration 025 — **S**
+Nel SQL Editor, poi `supabase/verify_frontend_contract.sql`.
 
 | Migration | Cosa porta |
 |---|---|
-| `023_plans_and_patient_suggestions.sql` | Istruzioni nel piano ("come seguirlo"), autogestione del paziente senza professionista, consigli mirati a un singolo paziente |
-| `024_admin_verifications.sql` | Approvazione delle verifiche professionali dall'app |
+| `025_food_review_and_admin_overview.sql` | Coda degli alimenti da verificare, quadro per l'amministratore, esportazione dei dati completa |
 
-**Attenzione:** la 023 sostituisce `start_macro_plan` con una versione a
-cinque parametri. Finché non la esegui, l'editor del piano risponde
-"Questa funzione non è ancora attiva sul server".
+`review_food` esisteva dalla prima migration e **nessuna schermata la
+chiamava**: tutto ciò che creavano pazienti e professionisti restava
+`unverified` per sempre. Mancava solo l'elenco di quelli in attesa.
 
-### 1.2 Nominare il primo amministratore — **S**
-È l'unica operazione che resta fuori dall'app, e va bene così.
+### 1.2 Password delle utenze di prova — **S**
+Nessuna delle due password che mi hai passato funziona, per nessuna
+delle due utenze: `/auth/v1/token?grant_type=password` risponde 400.
+Su `pasqualemonda03@gmail.com` la password non è stata cambiata dal 4
+ottobre (`auth.users.updated_at` è ancora quella data), quindi è una
+terza, che non conosco.
 
-```sql
-update public.profiles set role = 'admin'
- where id = (select id from auth.users where email = 'tu@esempio.it');
-```
+Finché non ho un accesso valido non posso provare cliccando: resta tutto
+verificabile solo in lettura sul database. Si risolve in un minuto da
+Dashboard → Authentication → Users → *utente* → Reset password.
 
-Poi: Profilo → Amministrazione → Verifiche professionali. Da lì si
-abilitano i professionisti senza più toccare il database.
-
-### 1.3 Abilitare un professionista e collegargli un paziente — **S**
-`pasquinapoli1@gmail.com` è nutrizionista ma **non verificato**
-(`professional_verified = false`), quindi non può pubblicare ricette né
-comparire in vetrina. Dopo la 024 lo si abilita dal pannello.
-
-Per provare il flusso completo serve anche un paziente collegato: dal
-profilo del professionista, "Invita pazienti" genera un codice; poi un
-secondo accesso come paziente lo riscatta. Senza un collegamento attivo
-restano non verificabili: piano macro, consigli mirati, commenti sul
-diario, aderenza, chat.
+### 1.3 Collegare un paziente a un professionista — **S**
+Serve per provare piano macro, consigli mirati, commenti sul diario,
+aderenza e chat: senza un collegamento attivo quelle RPC rispondono 403,
+ed è corretto che lo facciano. Dal profilo del professionista, "Invita
+pazienti" genera un codice; un secondo accesso come paziente lo
+riscatta.
 
 ---
 
@@ -90,6 +103,25 @@ diario come terza via di aggiunta ("Proponi tu") oppure rimossa.
 l'editor scrive solo obiettivi uguali tutti i giorni. Per chi si allena
 a giorni alterni servirebbe distinguere almeno "giorni di allenamento" e
 "giorni di riposo".
+
+
+### 2.5 Suggerimenti per chi amministra — **M**
+
+Il quadro generale ora dice cosa aspetta una decisione. Tre cose che
+mancano e che un amministratore si trova a dover fare prima o poi:
+
+- **cercare una persona**: non si può aprire un profilo partendo da un
+  indirizzo email, quindi ogni richiesta di assistenza finisce in una
+  query SQL. Serve una ricerca utenti con le azioni minime (vedere i
+  collegamenti, togliere l'abilitazione, bloccare);
+- **sospendere invece di cancellare**: oggi esiste solo
+  `delete_my_account`, definitivo. Per abusi serve una sospensione
+  reversibile, che il database può già esprimere con
+  `auth.users.banned_until`;
+- **leggere il registro**: `audit_log` registra cambi di ruolo,
+  verifiche, esportazioni e cancellazioni, e nessuno lo legge. Una
+  schermata con gli ultimi eventi rende verificabile quello che
+  succede, che è il punto di avere un registro.
 
 ---
 
@@ -177,12 +209,17 @@ di replica, nessun giudizio clinico.
 
 ## 6. Conformità e privacy (da non rimandare troppo)
 
-### 6.1 Informativa, consensi, cancellazione — **M**
-`legal_documents` e `terms_acceptances` esistono ma l'app non li usa:
-nessuna informativa all'iscrizione, nessuna accettazione registrata.
-`export_my_data` e `delete_my_account` esistono nel database ma non sono
-raggiungibili dall'app. Trattandosi di dati alimentari e sanitari
-servono tutti e tre.
+### 6.1 Informativa all'iscrizione — **M**
+Esportazione dei propri dati e cancellazione dell'account ora si fanno
+da Profilo → Dati personali → "I tuoi dati": `export_my_data` e
+`delete_my_account` esistevano nel database e non erano raggiungibili da
+nessuna schermata. L'esportazione finisce negli appunti; salvarla come
+file richiede un pacchetto per piattaforma ed è il passo successivo.
+
+Resta la parte più impegnativa: `legal_documents` e `terms_acceptances`
+esistono ma nessuno li usa, quindi non c'è informativa all'iscrizione né
+registrazione della versione accettata. Per dati alimentari e sanitari
+serve.
 
 ### 6.2 Moderazione di chat e ricette — **M**
 Chiunque può scrivere a un professionista pubblico e proporre ricette.

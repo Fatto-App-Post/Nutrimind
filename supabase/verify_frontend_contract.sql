@@ -3,7 +3,7 @@
 --
 -- Un'unica query: restituisce il totale dei controlli, quanti passano e
 -- l'elenco dei soli problemi. Se `problemi` è [] il database è allineato
--- all'app (migration 014-022).
+-- all'app (migration 014-025).
 -- =====================================================================
 
 with expected_rpc(name, args) as (values
@@ -18,7 +18,7 @@ with expected_rpc(name, args) as (values
   ('get_favorite_foods','{}'),('create_personal_meal','{p_name,p_items,p_default_slot}'),
   ('log_personal_meal','{p_meal_id,p_date,p_slot}'),
   -- piani e aderenza
-  ('get_current_macro_plan','{}'),('start_macro_plan','{p_patient_id,p_name,p_valid_from,p_targets}'),
+  ('get_current_macro_plan','{}'),
   ('get_patient_adherence','{p_patient_id,p_from,p_to,p_tolerance}'),('get_my_patients','{}'),
   ('get_diary_with_comments','{p_patient_id,p_from,p_to}'),
   -- commenti e notifiche
@@ -40,7 +40,21 @@ with expected_rpc(name, args) as (values
   -- chat (018)
   ('start_conversation','{p_other}'),('send_message','{p_conversation,p_body,p_kind,p_payload}'),
   ('send_invitation_message','{p_conversation}'),('mark_conversation_read','{p_conversation}'),
-  ('get_my_conversations','{}')
+  ('get_my_conversations','{}'),
+  -- piani, autogestione, consigli mirati (023)
+  ('start_macro_plan','{p_patient_id,p_name,p_valid_from,p_targets,p_notes}'),
+  ('can_self_manage_plan','{}'),
+  ('suggest_to_patient','{p_patient_id,p_meal_id,p_food_id,p_note}'),
+  ('remove_patient_suggestion','{p_id}'),
+  ('get_patient_suggestions','{p_patient_id}'),
+  -- amministrazione (024, 025)
+  ('get_pending_verifications','{}'),
+  ('review_professional_verification','{p_id,p_approve}'),
+  ('get_foods_to_review','{p_limit}'),
+  ('get_admin_overview','{}'),
+  ('review_food','{p_food_id,p_decision}'),
+  -- privacy
+  ('export_my_data','{}'),('delete_my_account','{}')
 ),
 expected_table(name, privs) as (values
   ('foods','SELECT,INSERT'),('profiles','SELECT,UPDATE'),('patient_settings','SELECT,UPDATE'),
@@ -50,7 +64,8 @@ expected_table(name, privs) as (values
   ('device_tokens','SELECT,INSERT,DELETE'),('suggested_meals','SELECT,INSERT,UPDATE,DELETE'),
   ('suggested_meal_items','SELECT,INSERT,UPDATE,DELETE'),
   ('nutritionist_plan_templates','SELECT,INSERT,UPDATE,DELETE'),
-  ('conversations','SELECT'),('messages','SELECT')
+  ('conversations','SELECT'),('messages','SELECT'),
+  ('patient_suggestions','SELECT')
 ),
 fn as (
   select p.proname, p.oid, coalesce(p.proargnames, '{}') as argnames,
@@ -195,6 +210,15 @@ checks(kind, name, detail, ok, problem) as (
     exists (select 1 from pg_class i join pg_index ix on ix.indexrelid = i.oid
              where ix.indrelid = 'public.foods'::regclass and i.relname = 'foods_name_trgm_idx'),
     'senza indice la ricerca per somiglianza scansiona tutto il catalogo'
+  union all
+
+  -- 025: l'esportazione dei dati deve comprendere le tabelle nuove,
+  -- altrimenti chi chiede i propri dati ne riceve solo una parte
+  select 'privacy', 'export_my_data', 'comprende i consigli mirati',
+    exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = 'export_my_data'
+               and pg_get_functiondef(p.oid) like '%patient_suggestions%'),
+    'esportazione incompleta: manca patient_suggestions'
 )
 select (select count(*) from checks) as totale,
        (select count(*) from checks where ok) as ok,

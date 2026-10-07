@@ -73,7 +73,11 @@ di integrazione, `main` la produzione.
   paziente, con una nota. Il paziente li trova in "Consigliati per te"
   quando aggiunge un pasto. Restano distinti dalle ricette pubblicate,
   che valgono per tutti.
-- Con il ruolo `admin`, l'approvazione delle verifiche professionali.
+- Con il ruolo `admin`: quadro generale (cosa aspetta una decisione e i
+  numeri del progetto), abilitazioni professionali, coda degli alimenti
+  da verificare. La coda degli alimenti la vede anche un professionista
+  verificato, ma non vi trova i propri: `review_food` non glielo
+  consente.
 - Ricette pubblicate senza revisione (per tutti o solo per i propri
   pazienti) e coda di verifica delle ricette dei pazienti.
 - Profilo pubblico (vetrina), piani alimentari "di base", codici invito.
@@ -167,6 +171,7 @@ Quelle da 014 in poi sono **rieseguibili** senza errori.
 | 022 | Ricerca alimenti per somiglianza (pg_trgm) e ordinata per pertinenza |
 | 023 | Piani con istruzioni, autogestione del paziente, consigli mirati a un singolo paziente |
 | 024 | Approvazione delle verifiche professionali dall'app, senza SQL |
+| 025 | Coda degli alimenti da verificare, quadro per l'amministratore, esportazione dati completa |
 
 **Lezione imparata:** il SQL Editor annulla l'intero script al primo
 errore. Conviene tenere le migration piccole e divise per area, e
