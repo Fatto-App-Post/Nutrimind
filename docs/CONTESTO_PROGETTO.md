@@ -1,6 +1,6 @@
 # NutriMind — contesto del progetto
 
-Documento unico di riferimento, aggiornato all'**8 ottobre 2026**. Riassume e
+Documento unico di riferimento, aggiornato al **10 ottobre 2026**. Riassume e
 sostituisce i file rimossi perché obsoleti o superati dal codice:
 `SETUP_COMPLETO.md`, `CONFIGURAZIONI_MANCANTI.md`, `supabase/README.md`,
 `docs/API_Utenze_Frontend.md`, `docs/FRONTEND_DEVELOPER_GUIDE.md`,
@@ -214,17 +214,65 @@ non chiama mai Open Food Facts direttamente.
 
 Le chiavi non stanno nel codice: si passano alla compilazione.
 
-```bash
-flutter run -d chrome --dart-define-from-file=env/dev.json
-```
-
 `env/dev.json` (escluso da git; il modello è `env/dev.example.json`)
 contiene URL e chiave pubblica di Supabase e i valori `FIREBASE_*`.
 **Mai** la chiave segreta: l'app si rifiuta di partire se la riceve.
 
 Per il push sul web serve anche `web/firebase-config.js`.
 
-Per provare l'app in un browser senza toccare il codice:
+### Come si avvia l'app: tre modi diversi
+
+Sono stati misurati tutti e tre il 10 ottobre su questa macchina.
+
+**1. In Chrome, con hot reload** — il modo normale per sviluppare:
+
+```bash
+flutter run -d chrome --dart-define-from-file=env/dev.json
+```
+
+Due cose da sapere, perché generano confusione. Primo: è **lento**, e il
+tempo sta tutto in "Waiting for connection from debug service on
+Chrome" — 103 secondi a cache fredda (dopo un `pub get`), 33 a cache
+calda. Non è bloccato, sta compilando l'app in JavaScript; va aspettato.
+Secondo: **non stampa nessun indirizzo dell'app.** Apre da sé una
+finestra di Chrome e gli unici URL che scrive a terminale sono quelli del
+debug service e di DevTools (`127.0.0.1:<porta casuale>`). Aprirli
+pensando di trovare l'app non porta all'app, e se si chiude la finestra
+che ha aperto Flutter non c'è nessun indirizzo a cui tornare.
+
+**2. Come server, con un indirizzo stabile** — quando si vuole solo
+usare l'app, aprirla in un browser a scelta, riaprirla più volte:
+
+```bash
+flutter run -d web-server --web-port=8080 --dart-define-from-file=env/dev.json
+```
+
+Scrive `lib\main.dart is being served at http://localhost:8080`.
+**Attenzione all'indirizzo:** il dev server si lega al solo loopback
+**IPv6**, cioè `[::1]:8080`. Verificato con tre richieste:
+`http://localhost:8080` risponde 200, `http://[::1]:8080` risponde 200,
+`http://127.0.0.1:8080` **non si connette**. Chi usa `127.0.0.1` per
+abitudine non ottiene un errore che spieghi il motivo, solo una
+connessione che non va. Per avere anche IPv4 serve
+`--web-hostname=127.0.0.1`; per raggiungere l'app dal telefono sulla
+stessa rete, `--web-hostname=0.0.0.0`, ricordando che così la si espone
+a tutta la rete locale.
+
+**3. Compilata, servita da un file server** — è quello che usa
+l'anteprima dentro Claude Code (`.claude/launch.json`, porta 8090):
+
+```bash
+flutter build web --dart-define-from-file=env/dev.json
+npx -y http-server build/web -p 8090 -c-1
+```
+
+La compilazione richiede circa 85 secondi e il risultato è statico: non
+c'è hot reload, ogni modifica va ricompilata. In compenso l'indirizzo è
+stabile e non dipende da un processo `flutter` in ascolto. Nota: quel
+server vive quanto la sessione che lo ha avviato — a sessione chiusa su
+`localhost:8090` non risponde più niente.
+
+Per i test automatici del browser va aggiunto un define:
 
 ```bash
 flutter build web --dart-define-from-file=env/dev.json --dart-define=ENABLE_SEMANTICS=true
@@ -236,6 +284,42 @@ nascosto "Enable accessibility". Serve ai test automatici del browser:
 senza di esso la pagina è una sola tela e non si può né leggere né
 toccare niente. **Non va usato in produzione**: tenere l'albero
 aggiornato ha un costo.
+
+### Cosa si riesce a compilare su questa macchina
+
+`flutter doctor` al 10 ottobre: **l'unico bersaglio che compila è il
+web.** Tre cose mancano, indipendenti fra loro:
+
+- **SDK Android assente**: niente build Android, né emulatore né
+  dispositivo. È la più importante, perché la fotocamera per il codice a
+  barre non si può provare sul web di un portatile.
+- **Visual Studio senza il carico "Desktop development with C++"**
+  (mancano MSVC v142, CMake per Windows, Windows 10 SDK): niente build
+  Windows desktop, anche se il dispositivo compare in `flutter devices`.
+- **Developer Mode di Windows disattivo**, quindi niente symlink.
+  `flutter pub get` lo segnala da sé: *"Building with plugins requires
+  symlink support"*. Si attiva con `start ms-settings:developers` e
+  serve a qualunque build nativa con plugin.
+
+Il risultato pratico è che `flutter run` senza `-d` offre anche Windows
+fra i dispositivi, ma scegliendolo la build fallisce. Finché le tre cose
+sopra restano così, va indicato sempre un bersaglio web (`-d chrome` o
+`-d web-server`).
+
+### Dipendenze
+
+Aggiornate il 10 ottobre con `flutter pub upgrade` (13 pacchetti erano
+fermi al `pubspec.lock`, non ai vincoli) e un solo cambio di vincolo a
+mano, `cupertino_icons` da `^1.0.8` a `^2.0.0`: è un major, ma la classe
+`CupertinoIcons` non è usata da nessuna parte nel codice, quindi non
+tocca niente. Dopo l'aggiornamento: analyzer pulito, 40 test verdi,
+build web e avvio verificati.
+
+Due pacchetti restano indietro e **non si possono aggiornare**:
+`material_color_utilities` e `test_api` sono fissati dall'SDK Flutter
+(`flutter pub outdated` li segna non risolvibili). Si muovono solo
+aggiornando Flutter, che oggi è 3.47.6 con una versione più recente
+disponibile. È un aggiornamento da fare a parte, non insieme ad altro.
 
 ### Firebase
 

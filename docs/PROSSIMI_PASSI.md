@@ -1,6 +1,6 @@
 # NutriMind — prossimi passi
 
-Aggiornato all'**8 ottobre 2026**. A questo punto i tre ruoli — paziente,
+Aggiornato al **10 ottobre 2026**. A questo punto i tre ruoli — paziente,
 professionista, amministratore — sono stati percorsi tutti a schermo.
 Per lo stato e i vincoli del database vedere
 [CONTESTO_PROGETTO.md](CONTESTO_PROGETTO.md).
@@ -72,10 +72,18 @@ quanto pesano:
 2. **Le notifiche push non partono** (punto 2.2): il database le crea e
    nessuno le inoltra. Serve attivare i Webhooks dalla dashboard, poi è
    mezz'ora di lavoro.
-3. **Android e iOS non sono mai stati compilati**: serve l'SDK Android
-   in locale. Finché resta solo il web, un'app di food tracking non si
-   può provare davvero: la fotocamera per il codice a barre è il suo
-   gesto principale.
+3. **Android e iOS non sono mai stati compilati.** Guardando
+   `flutter doctor` il 10 ottobre, non è una cosa sola ma tre, tutte da
+   fare prima di vedere l'app su un telefono: manca l'**SDK Android**;
+   manca il carico **"Desktop development with C++"** di Visual Studio
+   (che serve al bersaglio Windows, non ad Android, ma è l'altra ragione
+   per cui oggi compila solo il web); ed è disattivo il **Developer Mode
+   di Windows**, senza cui non c'è supporto per i symlink e nessuna build
+   con plugin passa — `flutter pub get` lo dice già a ogni esecuzione.
+   Finché resta solo il web, un'app di food tracking non si può provare
+   davvero: la fotocamera per il codice a barre è il suo gesto
+   principale. Dettagli in [CONTESTO_PROGETTO.md](CONTESTO_PROGETTO.md),
+   "Cosa si riesce a compilare su questa macchina".
 4. **`flutter drive` con `integration_test`** (punto 1.3): renderebbe
    ripetibile tutto quello che oggi si prova a mano, e tolgo di mezzo gli
    eventi sintetici.
@@ -200,7 +208,15 @@ Da aggiungere: test di `PlanService.distribute` (la ripartizione dei
 macro è aritmetica pura, facile da coprire) e test delle schermate
 principali con servizi finti.
 
-### 3.2 CI — in piedi, da rafforzare — **S**
+### 3.2 Aggiornare l'SDK Flutter — **S**
+Le dipendenze sono aggiornate (10 ottobre). Restano indietro
+`material_color_utilities` e `test_api`, che sono **fissati dall'SDK** e
+non si possono toccare dal `pubspec.yaml`: si muovono solo con
+`flutter upgrade`. Oggi l'SDK è 3.47.6 e ne esiste una più recente.
+Da fare in un commit a sé e con i test davanti, perché un cambio di SDK
+può muovere l'analyzer e il comportamento del web.
+
+### 3.3 CI — in piedi, da rafforzare — **S**
 - backend: migration analizzate col parser di PostgreSQL, Edge Functions
   con esbuild;
 - frontend: `flutter analyze`, `flutter test`, compilazione web.
@@ -212,11 +228,11 @@ modifiche:
 - `dart format`: la maggior parte dei file non è formattata. Una volta
   allineati, aggiungere `--set-exit-if-changed` alla CI.
 
-### 3.3 Paginazione — **S**
+### 3.4 Paginazione — **S**
 Ricerca, ricette, messaggi e conversazioni caricano un blocco fisso (da
 30 a 200 elementi) senza scorrimento infinito.
 
-### 3.4 La tavolozza è unica, le schermate no — **S**
+### 3.5 La tavolozza è unica, le schermate no — **S**
 Il tema ora è uno (`core/theme.dart`), ma le schermate costruiscono
 ancora a mano le proprie schede e i propri titoli: `Container` +
 `BoxDecoration` ripetuti decine di volte. Estrarre tre o quattro widget
