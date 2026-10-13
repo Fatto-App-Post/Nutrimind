@@ -54,6 +54,18 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
 };
 
+// Solo indirizzi cifrati: un'immagine http dentro una pagina https la
+// blocca il browser, quindi lasciarla passare darebbe solo un riquadro
+// rotto.
+function offImage(...candidates: unknown[]): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const url = candidate.trim();
+    if (url.startsWith('https://') && url.length <= 2048) return url;
+  }
+  return null;
+}
+
 /// Il catalogo esterno scrive spesso la porzione in inglese
 /// ("1 serving (47.5 g)"): la si riscrive in italiano quando è solo
 /// quella formula, lasciando stare le porzioni descrittive.
@@ -88,7 +100,12 @@ function mapProduct(product: Record<string, any>) {
     quantity_text: (product.quantity ?? null) || null,
     nutriscore_grade: (product.nutriscore_grade ?? null) || null,
     nova_group: num(product.nova_group),
-    image_front_url: product.image_front_small_url || product.image_front_url || null,
+    // Gli stessi due nomi delle colonne di `foods` (migration 028), così
+    // il modello Dart legge allo stesso modo un prodotto del catalogo e
+    // uno che arriva da qui. `image_front_url` resta per compatibilità.
+    image_thumb_url: offImage(product.image_front_small_url, product.image_front_url),
+    image_url: offImage(product.image_front_url, product.image_front_small_url),
+    image_front_url: offImage(product.image_front_small_url, product.image_front_url),
   };
 }
 

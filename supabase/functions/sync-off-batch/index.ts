@@ -42,6 +42,21 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
 };
 
+// Primo indirizzo valido fra quelli passati. Open Food Facts a volte
+// restituisce stringhe vuote o indirizzi in chiaro: un'immagine http su
+// una pagina https la blocca il browser, quindi meglio nessuna immagine
+// che un riquadro rotto. Il vincolo `foods_image_urls_https` della 028
+// rifiuterebbe comunque la scrittura, e qui farebbe fallire l'upsert di
+// tutta la riga.
+function imageUrl(...candidates: unknown[]): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const url = candidate.trim();
+    if (url.startsWith('https://') && url.length <= 2048) return url;
+  }
+  return null;
+}
+
 function offConfig() {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const isProd = supabaseUrl.includes(PROD_PROJECT_REF);
@@ -95,7 +110,12 @@ serve(async (req: Request) => {
       if (i > 0) await sleep(PAUSE_MS);
       try {
         const res = await fetch(
-          `${baseUri}/api/v2/product/${row.barcode}?fields=code,product_name,product_name_it,brands,quantity,serving_size,serving_quantity,nutriments,nutriscore_grade,nova_group`,
+          // Le immagini vanno chieste esplicitamente: con `fields` Open
+          // Food Facts restituisce solo le colonne elencate, e senza
+          // queste il batch riscriveva la riga lasciando l'immagine a
+          // null. Serve anche per tenerla aggiornata: se sulla
+          // confezione cambia la grafica, l'indirizzo su OFF cambia.
+          `${baseUri}/api/v2/product/${row.barcode}?fields=code,product_name,product_name_it,brands,quantity,serving_size,serving_quantity,nutriments,nutriscore_grade,nova_group,image_front_url,image_front_small_url,image_front_thumb_url,image_url,image_small_url`,
           { headers, signal: AbortSignal.timeout(12_000) },
         );
 
@@ -175,6 +195,15 @@ serve(async (req: Request) => {
             quantity_text: (product.quantity ?? null) || null,
             nutriscore_grade: (product.nutriscore_grade ?? null) || null,
             nova_group: num(product.nova_group),
+            // Riscritte a ogni passaggio, non solo al primo: è il modo
+            // di restare aggiornati quando su Open Food Facts qualcuno
+            // carica una foto migliore o la confezione cambia.
+            image_url: imageUrl(product.image_front_url, product.image_url),
+            image_thumb_url: imageUrl(
+              product.image_front_small_url,
+              product.image_front_thumb_url,
+              product.image_small_url,
+            ),
             is_active: true,
           }, { onConflict: 'source,source_id' })
           .select('id')

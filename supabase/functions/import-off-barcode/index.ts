@@ -242,7 +242,29 @@ function mapProduct(barcode: string, product: any, status: number, statusVerbose
     nutriscore_grade: text(product.nutriscore_grade),
     ecoscore_grade: text(product.ecoscore_grade),
     nova_group: inRange(num(product.nova_group), 1, 4),
+    // Due misure: la piccola per gli elenchi, la grande per la scheda.
+    // Si conserva l'indirizzo, non il file.
+    image_url: imageUrl(product.image_front_url, product.image_url),
+    image_thumb_url: imageUrl(
+      product.image_front_small_url,
+      product.image_front_thumb_url,
+      product.image_small_url,
+    ),
   };
+}
+
+// Open Food Facts a volte restituisce stringhe vuote o indirizzi in
+// chiaro. Un'immagine http su una pagina https la blocca il browser,
+// quindi tenerla non servirebbe a niente: meglio nessuna immagine che
+// un riquadro rotto. Il vincolo `foods_image_urls_https` della 028
+// rifiuterebbe comunque la scrittura.
+function imageUrl(...candidates: unknown[]): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const url = candidate.trim();
+    if (url.startsWith('https://') && url.length <= 2048) return url;
+  }
+  return null;
 }
 
 async function sha256(value: unknown) {
