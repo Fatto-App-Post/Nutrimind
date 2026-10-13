@@ -93,7 +93,7 @@ Usare valori diversi da questi fa **rifiutare la scrittura** dal database.
 | Dove | Valori |
 |---|---|
 | `meal_slot` | `breakfast`, `morning_snack`, `lunch`, `afternoon_snack`, `dinner`, `evening_snack` — **non esiste `snack`** |
-| `user_role` | `patient`, `nutritionist`, `admin` |
+| `user_role` | `base_user`, `patient`, `nutritionist`, `admin` |
 | `consent_scope` | `adherence`, `diary`, `profile` |
 | `approval_status` | `draft`, `pending_review`, `approved`, `rejected` |
 | `food_source` | `usda`, `crea`, `openfoodfacts`, `user`, `professional` — **non esiste `off`** |
@@ -189,6 +189,8 @@ Quelle da 014 in poi sono **rieseguibili** senza errori.
 | 026 | Correzione della 023: `kcal_estimated` è generata e non va scritta |
 | 027 | Gli alimenti personali non escono dalle ricerche degli altri, finché non vengono verificati |
 | 028 | Immagini degli alimenti: due colonne su `foods`, riempite e aggiornate dalle funzioni di Open Food Facts |
+| 029 | Aggiunge `base_user` a `user_role`. **Una riga, da eseguire da sola** |
+| 030 | Usa `base_user` nelle sei funzioni che servono, allinea chi c'è già, aggiunge `my_status()` |
 
 **Lezione imparata:** il SQL Editor annulla l'intero script al primo
 errore. Conviene tenere le migration piccole e divise per area, e

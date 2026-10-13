@@ -261,6 +261,35 @@ checks(kind, name, detail, ok, problem) as (
                  where n.nspname = 'public'
                    and has_function_privilege('anon', p.oid, 'EXECUTE')),
     'una funzione è raggiungibile senza autenticazione'
+
+  union all
+
+  -- 029/030: il ruolo «utente base». Se l'enum ha il valore ma le
+  -- funzioni non lo conoscono, chi si iscrive non riesce a fare niente:
+  -- sono due migration separate e dimenticare la seconda è facile.
+  select 'ruoli', 'user_role', 'l''enum comprende base_user',
+    exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
+             where t.typname = 'user_role' and e.enumlabel = 'base_user'),
+    'manca il valore base_user: eseguire la 029'
+
+  union all
+
+  select 'ruoli', 'funzioni', 'le sei funzioni del ruolo conoscono base_user',
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.prokind = 'f'
+        and p.proname in ('handle_new_user', 'links_validate_roles', 'redeem_invitation',
+                          'start_conversation', 'start_macro_plan', 'revoke_link')
+        and pg_get_functiondef(p.oid) like '%base_user%') = 6,
+    'eseguita la 029 ma non la 030: un utente base non puo collegarsi ne impostarsi gli obiettivi'
+
+  union all
+
+  select 'ruoli', 'coerenza', 'nessun paziente senza collegamento attivo',
+    not exists (select 1 from public.profiles p
+                 where p.role = 'patient'
+                   and not exists (select 1 from public.patient_links l
+                                    where l.patient_id = p.id and l.status = 'active')),
+    'ruolo e collegamenti si contraddicono: qualcuno e paziente senza nutrizionista'
 )
 select (select count(*) from checks) as totale,
        (select count(*) from checks where ok) as ok,

@@ -492,42 +492,49 @@ Richiesta: un utente nuovo che non ha (o non vuole) un nutrizionista è
 un **Utente Base**; quando si collega diventa **Paziente**; quando il
 collegamento si interrompe torna Utente Base.
 
-**Decisione presa: è uno stato derivato, non un valore nuovo di
-`user_role`.** La richiesta descrive una regola — se hai un collegamento
-attivo sei paziente, altrimenti no — e quella regola nel database esiste
-già e si chiama `has_active_link`. Scriverla anche in una colonna
-vorrebbe dire tenere allineate due verità che possono divergere: basta
-un collegamento revocato senza aggiornare il ruolo e un utente resta
-«paziente» senza nutrizionista, o il contrario.
+**Deciso: un valore vero nell'enum `user_role`** (migration 029 e 030,
+scritte, da applicare). Avevo proposto uno stato derivato dal
+collegamento ed è stato scelto il ruolo salvato.
 
-Il motivo tecnico pesa quanto quello logico. `user_role` è un enum e
-aggiungere un valore richiede un `ALTER TYPE`, che il SQL Editor non
-esegue nella stessa transazione del resto dello script (ci siamo già
-scontrati con questo per `notification_type`). Ma soprattutto **decine
-di funzioni e tutte le policy RLS controllano `role = 'patient'`**:
-`redeem_invitation` si rifiuta di funzionare per chi non è paziente,
-`log_meal` lo stesso, e così via. Un valore nuovo dell'enum vorrebbe
-dire rivederle una per una, col rischio di chiudere fuori dall'app
-proprio gli utenti nuovi.
+**Devo correggere una mia stima, perché era sbagliata e in modo
+importante.** Avevo scritto che «decine di funzioni e tutte le policy
+RLS controllano `role = 'patient'`». Controllato invece di stimare:
 
-Da fare, allora:
+- **nessuna policy RLS guarda il ruolo.** Usano `patient_id =
+  auth.uid()` e le funzioni d'aiuto (`has_active_link`,
+  `can_nutritionist_see`, …). È questo che rende l'operazione
+  ragionevole: la sicurezza del database non va rimessa in discussione;
+- **nove funzioni** contengono `'patient'`, non decine. Due lo usano
+  solo come etichetta nel registro di controllo e non vanno toccate;
+  una, `start_new_plan`, è superata e non è chiamata da nessuna parte.
+  Restano **sei**, più `revoke_link`.
 
-- una funzione `my_status()` che restituisce `base`, `patient`,
-  `nutritionist` o `admin` leggendo ruolo e collegamento attivo, così la
-  regola sta scritta **in un posto solo** invece di essere ricalcolata a
-  occhio in ogni schermata;
-- nel frontend uno `UserStatus` letto all'avvio e l'etichetta «Utente
-  Base» nel profilo;
-- il resto dell'app non cambia: l'autogestione del piano è **già**
-  governata da «nessun collegamento attivo» (migration 023), che è
-  esattamente la stessa condizione. Chi è utente base si imposta già gli
-  obiettivi da solo.
+Due controlli fatti prima di scrivere, che avrebbero cambiato il
+risultato:
 
-Se invece il valore nell'enum serve per qualcosa che non ho capito — per
-esempio distinguere «non ce l'ho ancora» da «non lo voglio», che è una
-scelta esplicita e non si deduce da nessun dato — allora servirebbe un
-campo in `patient_settings`, non un ruolo. Da chiarire prima di
-scrivere.
+- **niente legge il ruolo dal token** (`auth.jwt()`, `app_metadata`):
+  tutto legge `profiles`. Quindi la promozione ha effetto subito e il
+  client non deve rinnovare la sessione dopo essersi collegato;
+- i cambi di ruolo li registra **già** il trigger `profiles_audit`, con
+  valore di partenza e arrivo. Le mie chiamate a `log_audit` erano
+  doppioni e sono state togliere.
+
+Come funziona: chi si iscrive nasce `base_user`; `redeem_invitation`
+promuove a `patient` nella **stessa transazione** del collegamento;
+`revoke_link` riporta a `base_user` solo se non resta nessun altro
+collegamento attivo (nulla vieta due professionisti). Tenere le
+transizioni dentro quelle due funzioni è ciò che impedisce al ruolo e ai
+collegamenti di contraddirsi — il rischio che mi preoccupava — e lo
+script di contratto ora lo verifica con un controllo apposta.
+
+La 030 allinea anche chi c'è già: sul database di sviluppo **3 utenti su
+5** risultano `patient` senza collegamento attivo e tornano utenti base.
+
+Resta da fare nel frontend: leggere `my_status()` all'avvio, mostrare
+l'etichetta «Utente Base» nel profilo e cambiare le due voci della
+registrazione («Utente» e «Professionista», non «Paziente»). Nessun'altra
+schermata cambia: l'autogestione del piano era già governata da «nessun
+collegamento attivo», che è la stessa condizione.
 
 ### 8.2 Scheda Community, al centro di cinque — **L**
 
@@ -540,24 +547,38 @@ Nutrizionista** (solo per chi è Paziente) e **Le Mie Ricette**.
 (`CircularNotchedRectangle`). Non possono stare entrambi nello stesso
 posto. Tre strade, in ordine di preferenza:
 
-1. **Community al centro, il `+` diventa un pulsante normale in basso a
-   destra**, presente solo nelle schede Diario e Alimenti. Si perde un
-   po' di enfasi sul gesto principale, ma la barra resta pulita e
-   simmetrica come è stato chiesto.
-2. Community al centro e il `+` tolto del tutto: ogni pasto ha già il
-   suo `+`, quindi quello grande è in parte un doppione.
-3. Tenere la tacca e mettere Community come terza di cinque voci — ma
-   allora non è al centro, ed è il contrario della richiesta.
+**Deciso: Community al centro, il `+` resta al centro ma più in alto**,
+staccato dalla barra e sopra di essa. In Flutter è
+`FloatingActionButtonLocation.centerFloating` con la tacca della
+`BottomAppBar` rimossa (`shape: null`), altrimenti resta il buco dove
+non c'è più niente.
 
-Serve una parola su questa, perché cambia il gesto più usato dell'app.
+Due cose da tenere d'occhio quando si scrive: il `+` sospeso copre il
+fondo del contenuto, quindi le liste scorrevoli hanno bisogno di
+`padding` in basso per non finire sotto il pulsante (il diario ne ha già
+uno, va ricontrollato); e il pulsante ha senso solo sulle schede Diario
+e Alimenti — sulle altre tre va nascosto, non disabilitato.
 
 Sul database serve poco di nuovo: `suggested_meals` ha già `visibility`,
 `status` e `proposed_by`, e `get_recipes_for_me` esiste. Manca **la via
 di pubblicazione per chi non è professionista**: `publish_own_meal`
 richiede la verifica professionale, quindi oggi un paziente può solo
 *proporre* una ricetta al proprio nutrizionista e aspettare la
-revisione. Per «Dal Mondo» serve poter pubblicare senza revisione, e lì
-si apre il punto 8.3.
+revisione.
+
+**Deciso: si pubblica subito**, senza revisione preventiva, con il
+pulsante «segnala» e la possibilità di rimuovere. Quindi serve:
+
+- una RPC `publish_to_community` aperta a `patient` e `base_user`, che
+  porti la ricetta a `approved` con `visibility` pubblica. Attenzione a
+  `meals_reviewer_not_proposer` e `meals_approved_stamped`: il primo
+  vieta che chi revisiona sia l'autore, il secondo pretende
+  `reviewed_at` e `published_at` valorizzati. `publish_own_meal` lo
+  risolve lasciando `reviewed_by` vuoto, e qui va fatto allo stesso
+  modo;
+- la coda di segnalazioni e la rimozione, che è il punto 6.2 e **va
+  fatto insieme**, non dopo: pubblicare subito senza avere il modo di
+  togliere è la combinazione peggiore.
 
 ### 8.3 Commenti alle ricette, con le risposte — **M**
 

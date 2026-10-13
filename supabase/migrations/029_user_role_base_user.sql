@@ -1,0 +1,28 @@
+-- =====================================================================
+-- NutriMind — 029 IL RUOLO «UTENTE BASE»
+-- Rieseguibile.
+--
+-- **Questa migration contiene una riga sola e va eseguita da sola.**
+--
+-- `ALTER TYPE ... ADD VALUE` aggiunge il valore, ma PostgreSQL non
+-- permette di **usarlo** nella stessa transazione in cui è stato
+-- aggiunto: un `where role = 'base_user'` subito dopo, nello stesso
+-- script, fallisce con
+--
+--   55P04  unsafe use of new value "base_user" of enum type user_role
+--
+-- e il SQL Editor annulla tutto. Per questo tutto ciò che usa il valore
+-- nuovo sta nella 030, da eseguire dopo.
+--
+-- Chi è un utente base: una persona iscritta che non ha (o non vuole) un
+-- nutrizionista. Appena ne collega uno diventa `patient`; quando il
+-- collegamento finisce torna `base_user`. Le due transizioni avvengono
+-- dentro `redeem_invitation` e `revoke_link` (migration 030), che sono
+-- gli unici due punti in cui questo ruolo cambia da solo: tenerle lì
+-- serve a non avere il ruolo e i collegamenti che si contraddicono.
+--
+-- Il valore si aggiunge in coda all'enum. Nessun codice confronta i
+-- ruoli con `<` o `>`, quindi l'ordine non conta.
+-- =====================================================================
+
+alter type public.user_role add value if not exists 'base_user';
