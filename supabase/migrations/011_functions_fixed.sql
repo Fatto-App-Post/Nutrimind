@@ -1,5 +1,29 @@
 -- =====================================================================
 -- NutriMind — 011 FUNZIONI PER IL FRONTEND
+--
+-- ATTENZIONE: documento storico. **NON RIESEGUIRE.**
+--
+-- È la prima versione delle RPC e serve solo a ricostruire la storia o a
+-- ripartire da zero su un database vuoto, nell'ordine. Accanto a questo
+-- file ne esisteva un secondo, `011_functions.sql`, che definiva le
+-- stesse venti funzioni in una versione precedente: è stato eliminato il
+-- 13 ottobre perché avere due migration con lo stesso numero e contenuto
+-- diverso è solo un modo di applicare quella sbagliata.
+--
+-- Perché non rieseguirla: tre di queste funzioni sono state ricreate con
+-- una **firma diversa** dalle migration successive, e `create or
+-- replace` non sostituisce una funzione con parametri diversi, ne
+-- aggiunge una seconda:
+--
+--   * `search_foods(text, int)`        -> oggi ha 11 parametri (019, 022, 027)
+--   * `get_food_by_barcode(text)`      -> riscritta dalla 020 e dalla 027
+--   * `start_macro_plan(...)`          -> oggi ne ha 5 (023, 026)
+--
+-- Il guaio non sarebbe visibile subito. L'app manda alla RPC **soltanto
+-- i parametri impostati**, quindi una ricerca per solo testo finirebbe
+-- sul sovraccarico a due parametri e i filtri nutrizionali verrebbero
+-- ignorati in silenzio, senza nessun errore. Verificato il 13 ottobre
+-- che nel database di sviluppo esiste una sola versione di ciascuna.
 -- =====================================================================
 
 -- RICERCA ALIMENTI

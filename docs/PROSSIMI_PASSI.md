@@ -111,14 +111,28 @@ di ricerca sotto (`get_food_by_barcode` poi import da Open Food Facts)
 
 ## Da dove ripartire
 
-Le migration sono tutte applicate e i tre ruoli funzionano. Le cose
-ferme non sono più difetti dell'app, sono pezzi che mancano. In ordine di
-quanto pesano:
+Prima di tutto: **applicare la 027 e la 028** (punto 1.1), e
+**ripubblicare le tre funzioni di Open Food Facts** — `import-off-barcode`,
+`search-off`, `sync-off-batch` — senza cui le immagini non si salvano.
+
+Poi c'è un programma nuovo, chiesto il 13 ottobre, descritto alla
+sezione 8: utenti base, scheda Community, commenti alle ricette, foto e
+video delle ricette. È la cosa più grossa mai aggiunta all'app in un
+colpo e cambia la barra di navigazione, quindi conviene farla a pezzi
+nell'ordine indicato lì.
+
+Le altre cose ferme non sono difetti, sono pezzi che mancano. In ordine
+di quanto pesano:
 
 1. **Il catalogo alimenti è quasi vuoto** (punto 2.1): quattro righe. È
    il collo di bottiglia di tutto il resto — ricerca per valori
    nutrizionali, ricette composte, consigli mirati. Richiede una
-   decisione sulla fonte, non solo del codice.
+   decisione sulla fonte, non solo del codice. **Nota nuova:** adesso
+   che gli alimenti hanno un'immagine, un catalogo importato da CREA o
+   USDA arriverebbe *senza foto*, perché quelle tabelle non ne hanno.
+   Gli alimenti sfusi (pasta, riso, pollo) non hanno una confezione da
+   fotografare, quindi per loro il segnaposto è la cosa giusta e non un
+   ripiego: non è una ragione per preferire l'import da codici a barre.
 2. **Le notifiche push non partono** (punto 2.2): il database le crea e
    nessuno le inoltra. Serve attivare i Webhooks dalla dashboard, poi è
    mezz'ora di lavoro.
@@ -145,6 +159,42 @@ funzioni nuove: valgono dopo che il catalogo c'è.
 
 ## 1. Da applicare (serve un tuo passaggio)
 
+### 1.0 Sui freeze durante le prove — risposta
+
+Domanda del 13 ottobre: *«la navigazione fra elementi continua a dare
+problemi di freeze: è un problema del localhost o le schede non sono
+reattive?»* Misurato, sono **due cose diverse e nessuna delle due è la
+barra di navigazione**.
+
+1. **Un difetto vero, ora corretto**, ma in un punto solo: l'editor
+   degli obiettivi. Ogni casella era identificata da una `ValueKey` che
+   conteneva il valore digitato nella casella stessa, quindi a ogni
+   tasto Flutter buttava via il campo e lo ricreava. Diciotto caselle
+   sulla stessa schermata: quello si piantava davvero.
+2. **Il resto è il modo in cui si prova l'app, non l'app.** Sul web la
+   build di *debug* carica l'applicazione come ~**978 moduli JavaScript
+   separati** (si legge nella console: `DDC is about to load 978/978
+   scripts`) e fa passare ogni fotogramma per il compilatore di
+   sviluppo. È lenta di natura, dieci volte e più della build di
+   release. Nella build servita a `localhost:8090` la navigazione fra
+   le schede è immediata: provate a mano Diario → Alimenti → ricerca →
+   dettaglio → Profilo, nessuna attesa.
+
+La barra e lo shell sono stati letti: `CustomBottomNav` cambia solo un
+indice (`tab?.value = index`), nessun push di route, e `PatientShell`
+tiene le quattro schede in un `IndexedStack`, quindi cambiare scheda non
+ricostruisce niente e non ricarica nulla da zero. Strutturalmente non
+c'è niente da sistemare.
+
+**Come provare la velocità vera:** `flutter build web` e servire
+`build/web` (vedi CONTESTO_PROGETTO.md, "Come si avvia l'app", modo 3).
+Con `flutter run -d chrome` si misura il compilatore, non l'app.
+
+Resta un dubbio che si chiarirà solo su un telefono: sul web ogni
+`setState` ridisegna su tela, e su un dispositivo lento certe schermate
+possono restare pesanti. Ma è un discorso che ha senso aprire dopo aver
+compilato per Android, non adesso (punto 3 di "Da dove ripartire").
+
 ### 1.1 Da applicare: la 027
 Da 014 a 026 sono applicate. **La 027 no**, ed è la più importante delle
 ultime: `search_foods` e `get_food_by_barcode` leggevano `public.foods`
@@ -160,6 +210,14 @@ della voce verificata — proprio quello che crea il percorso
 
 Trovata controllando una per una le 68 RPC esposte: cinque non facevano
 nessun controllo, tre a ragione, due no.
+
+**E la 028**, che aggiunge a `foods` le due colonne per le immagini.
+Insieme alla migration vanno **ripubblicate tre Edge Functions**:
+`import-off-barcode` e `sync-off-batch` (salvano e riaggiornano
+l'immagine) e `search-off` (la restituisce con i nomi nuovi). Senza la
+migration le funzioni non possono scrivere quelle colonne; senza le
+funzioni la migration resta vuota. Nell'app il codice c'è già e si
+arrangia: dove l'immagine manca disegna un segnaposto.
 
 Dopo ogni migration conviene eseguire
 `supabase/verify_frontend_contract.sql`: lo script ora controlla anche le
@@ -369,9 +427,19 @@ esistono ma nessuno li usa, quindi non c'è informativa all'iscrizione né
 registrazione della versione accettata. Per dati alimentari e sanitari
 serve.
 
-### 6.2 Moderazione di chat e ricette — **M**
+### 6.2 Moderazione di chat e ricette — **M, diventata urgente**
 Chiunque può scrivere a un professionista pubblico e proporre ricette.
 Manca segnalare e bloccare, e un registro per chi modera.
+
+**Da rimandabile a bloccante.** Finché le ricette passavano dalla
+revisione di un professionista, la moderazione era una rete di
+sicurezza. Con la Community del punto 8 — ricette pubblicate da tutti,
+commenti aperti a tutti, foto e video caricati dagli utenti — diventa il
+primo giorno un problema concreto e non più un'ipotesi. **Non va dopo la
+Community: va insieme**, almeno nella forma minima (segnalare, una coda
+per chi amministra, sospendere un utente). Vedere anche il punto 2.5,
+che chiedeva già la sospensione reversibile al posto della sola
+cancellazione definitiva.
 
 ### 6.3 Conservazione dei dati — **S**
 `audit_log` e `food_snapshots` crescono senza limite.
@@ -387,9 +455,197 @@ Manca segnalare e bloccare, e un registro per chi modera.
   anche il paziente per gli alimenti personali.
 - **Stato condiviso**: `flutter_riverpod` e `go_router` sono tra le
   dipendenze e non vengono usati; ogni schermata ricarica da sola.
-- **`011_functions.sql` e `011_functions_fixed.sql`** convivono: tenere
-  solo la versione valida.
+- ~~**`011_functions.sql` e `011_functions_fixed.sql`** convivono~~ —
+  **fatto il 13 ottobre.** Eliminata la prima, che era la versione
+  precedente delle stesse venti funzioni, e messo un avviso in testa
+  alla seconda. Il pericolo non era avere due file: era rieseguirli.
+  `search_foods`, `get_food_by_barcode` e `start_macro_plan` sono state
+  ricreate con **firme diverse** dalle migration successive, e
+  `create or replace` non sostituisce una funzione con parametri
+  diversi, **ne aggiunge una seconda**. Siccome l'app manda alla RPC
+  soltanto i parametri impostati, una ricerca per solo testo sarebbe
+  finita sul sovraccarico a due parametri e i filtri nutrizionali
+  sarebbero stati ignorati **in silenzio**. Verificato che nel database
+  di sviluppo esiste una sola versione di ciascuna.
 - **Supabase CLI**: tutto si applica a mano dal SQL Editor. Con
   `supabase link` e `supabase db push` le migration sarebbero tracciate
   e ripetibili su PROD.
 - **Chiavi esposte**: restano da rigenerare (vedi CONTESTO_PROGETTO.md).
+
+---
+
+## 8. Il programma chiesto il 13 ottobre
+
+Sei richieste arrivate insieme. Due sono già fatte (8.4 in parte e 8.5),
+le altre sono una funzione nuova e grossa che cambia anche la barra di
+navigazione. Qui sotto l'ordine con cui conviene affrontarle, le
+decisioni che ho preso e quelle che restano da prendere.
+
+**Perché quest'ordine:** la Community non si può scrivere prima di aver
+deciso chi è «utente base», perché è la vista che distingue i due. I
+commenti vengono dopo che c'è una schermata dove metterli. Le foto sono
+indipendenti da tutto e si possono infilare quando si vuole.
+
+### 8.1 «Utente Base» accanto a «Paziente» — **M**
+
+Richiesta: un utente nuovo che non ha (o non vuole) un nutrizionista è
+un **Utente Base**; quando si collega diventa **Paziente**; quando il
+collegamento si interrompe torna Utente Base.
+
+**Decisione presa: è uno stato derivato, non un valore nuovo di
+`user_role`.** La richiesta descrive una regola — se hai un collegamento
+attivo sei paziente, altrimenti no — e quella regola nel database esiste
+già e si chiama `has_active_link`. Scriverla anche in una colonna
+vorrebbe dire tenere allineate due verità che possono divergere: basta
+un collegamento revocato senza aggiornare il ruolo e un utente resta
+«paziente» senza nutrizionista, o il contrario.
+
+Il motivo tecnico pesa quanto quello logico. `user_role` è un enum e
+aggiungere un valore richiede un `ALTER TYPE`, che il SQL Editor non
+esegue nella stessa transazione del resto dello script (ci siamo già
+scontrati con questo per `notification_type`). Ma soprattutto **decine
+di funzioni e tutte le policy RLS controllano `role = 'patient'`**:
+`redeem_invitation` si rifiuta di funzionare per chi non è paziente,
+`log_meal` lo stesso, e così via. Un valore nuovo dell'enum vorrebbe
+dire rivederle una per una, col rischio di chiudere fuori dall'app
+proprio gli utenti nuovi.
+
+Da fare, allora:
+
+- una funzione `my_status()` che restituisce `base`, `patient`,
+  `nutritionist` o `admin` leggendo ruolo e collegamento attivo, così la
+  regola sta scritta **in un posto solo** invece di essere ricalcolata a
+  occhio in ogni schermata;
+- nel frontend uno `UserStatus` letto all'avvio e l'etichetta «Utente
+  Base» nel profilo;
+- il resto dell'app non cambia: l'autogestione del piano è **già**
+  governata da «nessun collegamento attivo» (migration 023), che è
+  esattamente la stessa condizione. Chi è utente base si imposta già gli
+  obiettivi da solo.
+
+Se invece il valore nell'enum serve per qualcosa che non ho capito — per
+esempio distinguere «non ce l'ho ancora» da «non lo voglio», che è una
+scelta esplicita e non si deduce da nessun dato — allora servirebbe un
+campo in `patient_settings`, non un ruolo. Da chiarire prima di
+scrivere.
+
+### 8.2 Scheda Community, al centro di cinque — **L**
+
+Tre viste: **Dal Mondo** (le ricette pubblicate dai professionisti per
+tutti, più quelle aggiunte da pazienti e utenti base), **Dal Mio
+Nutrizionista** (solo per chi è Paziente) e **Le Mie Ricette**.
+
+**Nodo da sciogliere subito: al centro della barra oggi c'è il pulsante
+`+` del diario**, incastonato nella tacca della `BottomAppBar`
+(`CircularNotchedRectangle`). Non possono stare entrambi nello stesso
+posto. Tre strade, in ordine di preferenza:
+
+1. **Community al centro, il `+` diventa un pulsante normale in basso a
+   destra**, presente solo nelle schede Diario e Alimenti. Si perde un
+   po' di enfasi sul gesto principale, ma la barra resta pulita e
+   simmetrica come è stato chiesto.
+2. Community al centro e il `+` tolto del tutto: ogni pasto ha già il
+   suo `+`, quindi quello grande è in parte un doppione.
+3. Tenere la tacca e mettere Community come terza di cinque voci — ma
+   allora non è al centro, ed è il contrario della richiesta.
+
+Serve una parola su questa, perché cambia il gesto più usato dell'app.
+
+Sul database serve poco di nuovo: `suggested_meals` ha già `visibility`,
+`status` e `proposed_by`, e `get_recipes_for_me` esiste. Manca **la via
+di pubblicazione per chi non è professionista**: `publish_own_meal`
+richiede la verifica professionale, quindi oggi un paziente può solo
+*proporre* una ricetta al proprio nutrizionista e aspettare la
+revisione. Per «Dal Mondo» serve poter pubblicare senza revisione, e lì
+si apre il punto 8.3.
+
+### 8.3 Commenti alle ricette, con le risposte — **M**
+
+Solo testo ed emoji, nessuna immagine; si risponde sia alla ricetta sia
+a un commento. Serve una tabella `recipe_comments` con un `parent_id`
+che punta a sé stessa, RLS che lasci leggere i commenti delle ricette
+che si possono già vedere, scrivere a chiunque sia autenticato e
+cancellare solo i propri (più chi modera).
+
+Due cose da decidere bene, perché sono quelle che trasformano i commenti
+da funzione a problema:
+
+- **la profondità**: due livelli (ricetta → commento → risposta)
+  bastano e si disegnano; un albero senza fondo è illeggibile su un
+  telefono e pesante da leggere in una query;
+- **la moderazione, prima di aprire** e non dopo: pulsante «segnala»,
+  una coda per chi amministra, e il blocco di un utente. Il punto 6.2
+  chiedeva già moderazione per chat e ricette e non è mai stato fatto.
+  Aprire i commenti a tutti senza niente di tutto questo significa che
+  il primo giorno in cui qualcuno scrive una cosa sbagliata non si ha
+  nessuno strumento per toglierla, se non una query SQL.
+
+Che siano «solo testo ed emoji» aiuta ma non basta: le emoji non si
+filtrano, le parole sì, e un indirizzo web dentro un commento è testo.
+
+### 8.4 Condividere una ricetta in chat — **S**
+
+Il paziente manda al proprio nutrizionista una ricetta per chiedere
+sostituzioni o correzioni. **Questa è quasi fatta e non lo sapevamo:**
+`send_message` accetta già `p_kind` e `p_payload`, e la chat sa già
+disegnare la scheda di una ricetta e aprirla (`_openRecipe` in
+`chat_screen.dart`, usato per i consigli mirati). Manca solo il gesto di
+partenza: un «Condividi col mio nutrizionista» sulla ricetta, visibile a
+chi ha un collegamento attivo.
+
+È il pezzo col rapporto migliore fra valore e lavoro di tutto il
+programma: **da fare per primo**, prima della Community.
+
+### 8.5 Immagini degli alimenti — **fatto**
+
+Migration 028, le tre Edge Functions, e nell'app le foto negli elenchi,
+nella ricerca e nella scheda del prodotto. Da applicare e ripubblicare
+(punto 1.1). Verificato a schermo: i prodotti del catalogo esterno
+mostrano la confezione, i nostri il segnaposto finché la 028 non è
+applicata.
+
+Una cosa da sapere: **sul web le immagini dipendono dalle intestazioni
+CORS** del sito che le ospita, e la prova fatta qui **non vale**, perché
+l'ambiente dell'anteprima è permissivo e c'è di mezzo il proxy
+aziendale. Su Android e iOS il CORS non si applica e si vedranno. Se sul
+web non si vedessero, la via è una Edge Function che faccia da tramite
+per le immagini: mezza giornata, da fare solo se serve davvero.
+
+### 8.6 Foto e video delle proprie ricette — **M, da fare**
+
+È l'unico punto dell'app in cui un utente carica un file. Richiede:
+
+- un **bucket Supabase Storage** con le sue regole: chi carica scrive
+  solo nella propria cartella, la lettura è pubblica per le ricette
+  pubblicate. Si crea da migration inserendo in `storage.buckets`,
+  quindi senza passare dalla dashboard;
+- una tabella `recipe_media` e non una colonna: `suggested_meals` ha una
+  sola `image_url`, e qui servono **più** file e due tipi diversi;
+- limiti scritti **nel bucket** e non solo nell'app: dimensione massima
+  e tipi MIME ammessi. Un video girato con un telefono moderno sono
+  decine di megabyte e il piano gratuito di Supabase dà **1 GB**: con
+  cinquanta video si è fuori. Conviene decidere subito un tetto per
+  utente e una durata massima;
+- ridimensionamento e miniatura dal lato dell'app prima di caricare:
+  mandare 8 MB per mostrare un riquadro da 300 pixel li paga l'utente in
+  dati;
+- la moderazione del punto 8.3, che con immagini e video pesa molto più
+  che col testo.
+
+**Considerazione da non aggirare:** i file caricati dagli utenti sono la
+cosa più delicata di tutto il programma, più dei commenti. Finché l'app
+sta su DEV con tre utenze di prova non si vede, ma vanno decisi insieme
+il tetto di spazio, la moderazione e **cosa succede ai file quando
+qualcuno cancella il proprio account**: `delete_my_account` oggi non sa
+niente dello Storage, quindi i file resterebbero dopo la cancellazione,
+ed è esattamente il genere di cosa che un'informativa privacy promette
+di non fare.
+
+### 8.7 Immagini anche nel diario — **S, suggerimento mio**
+
+Non è stato chiesto ma è lo stesso lavoro già fatto: nel diario le voci
+registrate hanno ancora un rientro vuoto largo 57 pixel dove starebbe la
+miniatura. Oggi non si può riempire perché `get_diary_entries` non
+restituisce l'immagine dell'alimento: va aggiunta ai campi che quella
+RPC espone. Mezz'ora, e il diario si legge a colpo d'occhio come la
+ricerca.

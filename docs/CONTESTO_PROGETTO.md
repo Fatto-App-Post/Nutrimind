@@ -188,6 +188,7 @@ Quelle da 014 in poi sono **rieseguibili** senza errori.
 | 025 | Coda degli alimenti da verificare, quadro per l'amministratore, esportazione dati completa |
 | 026 | Correzione della 023: `kcal_estimated` è generata e non va scritta |
 | 027 | Gli alimenti personali non escono dalle ricerche degli altri, finché non vengono verificati |
+| 028 | Immagini degli alimenti: due colonne su `foods`, riempite e aggiornate dalle funzioni di Open Food Facts |
 
 **Lezione imparata:** il SQL Editor annulla l'intero script al primo
 errore. Conviene tenere le migration piccole e divise per area, e
