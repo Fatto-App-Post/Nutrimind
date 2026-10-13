@@ -7,9 +7,22 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { parseQuery } from 'libpg-query';
+import { fileURLToPath } from 'node:url';
+// libpg-query è un modulo CommonJS e va importato dal default: con
+// `import { ... } from` Node solleva un errore di export mancante e il
+// controllo non parte nemmeno. Dalla 17 la funzione si chiama `parse`
+// (prima `parseQuery`) e il parser vero è WebAssembly, quindi va
+// caricato una volta con `loadModule()` prima del primo uso.
+import libpg from 'libpg-query';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const { loadModule, parse } = libpg;
+await loadModule();
+
+// `URL.pathname` non è un percorso di file: su Windows restituisce
+// `/C:/...` e lascia gli spazi codificati (`%20`), quindi `join` non
+// trovava niente e il controllo passava a vuoto. `fileURLToPath` fa la
+// conversione giusta su tutti i sistemi.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIRS = ['migrations', 'supabase/migrations', 'supabase'];
 
 async function sqlFiles(dir) {
@@ -34,7 +47,7 @@ const failures = [];
 for (const file of files) {
   const name = relative(ROOT, file).replace(/\\/g, '/');
   try {
-    await parseQuery(await readFile(file, 'utf8'));
+    await parse(await readFile(file, 'utf8'));
     console.log(`  ok   ${name}`);
   } catch (error) {
     failures.push({ name, message: error?.message ?? String(error) });

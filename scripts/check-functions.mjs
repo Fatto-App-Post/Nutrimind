@@ -9,9 +9,12 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { transform } from 'esbuild';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// Come in check-sql.mjs: `URL.pathname` su Windows dà `/C:/...` con gli
+// spazi codificati, e il controllo non trovava nessun file.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const FUNCTIONS = join(ROOT, 'supabase/functions');
 
 const dirs = (await readdir(FUNCTIONS, { withFileTypes: true }))

@@ -1,6 +1,6 @@
 # NutriMind — prossimi passi
 
-Aggiornato al **10 ottobre 2026**. A questo punto i tre ruoli — paziente,
+Aggiornato al **13 ottobre 2026**. A questo punto i tre ruoli — paziente,
 professionista, amministratore — sono stati percorsi tutti a schermo.
 Per lo stato e i vincoli del database vedere
 [CONTESTO_PROGETTO.md](CONTESTO_PROGETTO.md).
@@ -59,6 +59,56 @@ caso; per ora conviene tenere i due ruoli su utenze separate.
 
 ---
 
+## Difetti trovati e corretti il 13 ottobre
+
+Tutti verificati a schermo, tranne dove indicato.
+
+- **Ricollegarsi con un codice già usato diceva "Collegamento creato"
+  senza collegare niente.** `redeem_invitation` restituisce `null` — non
+  un errore — quando il codice è sbagliato, scaduto o **già consumato**,
+  e lo fa di proposito: prima registra il tentativo fallito, e un
+  `raise` annullerebbe anche quella scrittura, cioè il conteggio che
+  protegge dai tentativi a raffica. Il client non guardava il valore di
+  ritorno. Corretto nel servizio, così valgono tutti i chiamanti.
+- **L'editor degli obiettivi si piantava.** Ogni casella era
+  identificata da una `ValueKey` che conteneva *il valore digitato nella
+  casella stessa*: a ogni carattere la chiave cambiava e Flutter
+  distruggeva e ricreava il campo con un controller nuovo. Diciotto
+  caselle sulla stessa schermata. Ora i controller sono persistenti.
+- **Nel tema chiaro molti testi erano invisibili.** Erano scritti
+  `Colors.white` perché l'app è nata solo scura. Non c'era nessun
+  gradiente sotto, come si era creduto: il diario è `bgColor` e
+  `cardColor`. Invisibili: il saluto, "Macros di oggi", i grammi dei
+  macro, "I tuoi pasti", i titoli dei pasti, le icone di chat e
+  notifiche, il nome e le calorie di ogni alimento registrato, il
+  titolo e il campo del dialogo di modifica, **il testo che si digita
+  nella ricerca**, il titolo di **ogni risultato di ricerca**, la
+  freccia indietro e il titolo della schermata di ricerca, il titolo e i
+  campi dei filtri nutrizionali. Più tre superfici chiare fisse che nel
+  tema scuro facevano il danno opposto, ora `tealSoft`.
+- **I grammi si muovevano solo di dieci in dieci** e il minimo era 10,
+  mentre il database ammette da 1 a 10000
+  (`diary_entries_grams_check`): cinque grammi di olio non si potevano
+  registrare. Ora il numero si tocca e si scrive.
+- **Gli alimenti personali di chiunque uscivano nelle ricerche di
+  tutti** (migration 027, punto 1.1).
+- **I due controlli della CI del backend non funzionavano** (vedi
+  CONTESTO_PROGETTO.md, punto 7 di "Come lavorare"). Ora girano: 24/24
+  file SQL e 7/7 Edge Functions.
+- **Gli errori ora si fermano in una finestra** invece di passare in uno
+  snackbar: 39 punti convertiti.
+- **L'intestazione del diario sforava** su schermi stretti: il nome
+  dell'utente stava in un `Row` senza `Expanded`. Cercati gli altri casi
+  dello stesso tipo in tutta l'app: non ce ne sono con testo scritto
+  dall'utente.
+
+**Non verificato cliccando:** il nuovo flusso del codice a barre. Serve
+una fotocamera, che nell'anteprima web del portatile non c'è; la logica
+di ricerca sotto (`get_food_by_barcode` poi import da Open Food Facts)
+è invece la stessa di prima e quella è provata.
+
+---
+
 ## Da dove ripartire
 
 Le migration sono tutte applicate e i tre ruoli funzionano. Le cose
@@ -95,8 +145,23 @@ funzioni nuove: valgono dopo che il catalogo c'è.
 
 ## 1. Da applicare (serve un tuo passaggio)
 
-### 1.1 Tutte le migration sono applicate
-Da 014 a 026, nessuna in sospeso. Dopo ogni migration conviene eseguire
+### 1.1 Da applicare: la 027
+Da 014 a 026 sono applicate. **La 027 no**, ed è la più importante delle
+ultime: `search_foods` e `get_food_by_barcode` leggevano `public.foods`
+senza distinguere il catalogo dagli **alimenti personali**, quindi
+cercando una parola qualsiasi si ottenevano quelli di chiunque, col nome
+che l'autore ha scelto. Per il codice a barre non serviva nemmeno
+indovinare un identificativo: i codici stanno stampati sulle confezioni.
+E siccome `get_food_by_barcode` non aveva né ordine né limite e il client
+prende il primo risultato, il primo alimento personale con un codice
+vero sarebbe diventato la risposta di tutti per quel prodotto, al posto
+della voce verificata — proprio quello che crea il percorso
+"Inseriscilo tu" dello scanner.
+
+Trovata controllando una per una le 68 RPC esposte: cinque non facevano
+nessun controllo, tre a ragione, due no.
+
+Dopo ogni migration conviene eseguire
 `supabase/verify_frontend_contract.sql`: lo script ora controlla anche le
 colonne generate delle due tabelle su cui ci siamo sbagliati, perché è
 un errore che si vede solo a runtime, quando qualcuno prova a salvare.
@@ -208,13 +273,14 @@ Da aggiungere: test di `PlanService.distribute` (la ripartizione dei
 macro è aritmetica pura, facile da coprire) e test delle schermate
 principali con servizi finti.
 
-### 3.2 Aggiornare l'SDK Flutter — **S**
-Le dipendenze sono aggiornate (10 ottobre). Restano indietro
-`material_color_utilities` e `test_api`, che sono **fissati dall'SDK** e
-non si possono toccare dal `pubspec.yaml`: si muovono solo con
-`flutter upgrade`. Oggi l'SDK è 3.47.6 e ne esiste una più recente.
-Da fare in un commit a sé e con i test davanti, perché un cambio di SDK
-può muovere l'analyzer e il comportamento del web.
+### 3.2 SDK Flutter — fatto, con un avvertimento — **S**
+Aggiornato il 13 ottobre a **3.47.7** (Dart resta 3.13.5): analyzer
+pulito, 40 test verdi, build e avvio verificati. Nessuna rottura.
+
+L'avvertimento: `material_color_utilities` e `test_api` **non si sono
+mossi**. Erano l'unica ragione per aggiornare e un rilascio di patch non
+cambia i pin dell'SDK. Per quei due serve un rilascio minore di Flutter,
+quindi non vale rincorrerlo.
 
 ### 3.3 CI — in piedi, da rafforzare — **S**
 - backend: migration analizzate col parser di PostgreSQL, Edge Functions

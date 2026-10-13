@@ -149,6 +149,17 @@ del resto dello script.
   `EXECUTE`, la lettura della tabella protetta va in errore.
 - Il nutrizionista vede i dati del paziente solo con un collegamento
   attivo **e** il consenso adeguato (`adherence`, `diary`, `profile`).
+- **`public.foods` contiene due cose diverse**: il catalogo, che è di
+  tutti (`usda`, `crea`, `openfoodfacts`, `professional`), e gli
+  alimenti personali (`source = 'user'`), che si vedono solo da chi li
+  ha scritti finché qualcuno non li verifica. Chi scrive una funzione
+  nuova che legge `foods` deve ripetere quella condizione: la 027 la
+  mette in `search_foods` e `get_food_by_barcode`, ma `security
+  definer` scavalca la protezione per riga, quindi non c'è nessuna rete
+  che la applichi da sola.
+- `get_food(p_id)` è volutamente più larga: la raggiunge il paziente per
+  aprire un alimento consigliato dal nutrizionista. Si arriva solo con
+  l'UUID esatto.
 
 ---
 
@@ -176,6 +187,7 @@ Quelle da 014 in poi sono **rieseguibili** senza errori.
 | 024 | Approvazione delle verifiche professionali dall'app, senza SQL |
 | 025 | Coda degli alimenti da verificare, quadro per l'amministratore, esportazione dati completa |
 | 026 | Correzione della 023: `kcal_estimated` è generata e non va scritta |
+| 027 | Gli alimenti personali non escono dalle ricerche degli altri, finché non vengono verificati |
 
 **Lezione imparata:** il SQL Editor annulla l'intero script al primo
 errore. Conviene tenere le migration piccole e divise per area, e
@@ -247,16 +259,17 @@ usare l'app, aprirla in un browser a scelta, riaprirla più volte:
 flutter run -d web-server --web-port=8080 --dart-define-from-file=env/dev.json
 ```
 
-Scrive `lib\main.dart is being served at http://localhost:8080`.
-**Attenzione all'indirizzo:** il dev server si lega al solo loopback
-**IPv6**, cioè `[::1]:8080`. Verificato con tre richieste:
-`http://localhost:8080` risponde 200, `http://[::1]:8080` risponde 200,
-`http://127.0.0.1:8080` **non si connette**. Chi usa `127.0.0.1` per
-abitudine non ottiene un errore che spieghi il motivo, solo una
-connessione che non va. Per avere anche IPv4 serve
-`--web-hostname=127.0.0.1`; per raggiungere l'app dal telefono sulla
-stessa rete, `--web-hostname=0.0.0.0`, ricordando che così la si espone
-a tutta la rete locale.
+Scrive `lib\main.dart is being served at http://localhost:8080`. Così
+com'è si lega a `0.0.0.0`, quindi rispondono sia `localhost` sia
+`127.0.0.1`, e l'app è raggiungibile dal telefono sulla stessa rete
+(tenendo presente che la espone a tutta la rete locale).
+
+**Da non aggiungere: `--web-hostname=localhost`.** Con quel parametro il
+server si lega al *solo* loopback **IPv6** (`[::1]:8080`) e
+`http://127.0.0.1:8080` smette di rispondere, senza nessun errore che
+spieghi il motivo. Verificato con tre richieste: `localhost` 200,
+`[::1]` 200, `127.0.0.1` nessuna connessione. Per il solo IPv4,
+`--web-hostname=127.0.0.1`.
 
 **3. Compilata, servita da un file server** — è quello che usa
 l'anteprima dentro Claude Code (`.claude/launch.json`, porta 8090):
@@ -317,9 +330,17 @@ build web e avvio verificati.
 
 Due pacchetti restano indietro e **non si possono aggiornare**:
 `material_color_utilities` e `test_api` sono fissati dall'SDK Flutter
-(`flutter pub outdated` li segna non risolvibili). Si muovono solo
-aggiornando Flutter, che oggi è 3.47.6 con una versione più recente
-disponibile. È un aggiornamento da fare a parte, non insieme ad altro.
+(`flutter pub outdated` li segna non risolvibili).
+
+L'SDK è stato aggiornato il 13 ottobre da **3.47.6 a 3.47.7** (Dart
+resta 3.13.5): analyzer pulito, 40 test verdi, build web e avvio
+verificati. Nella stessa occasione sono saliti anche
+`supabase_flutter` 2.18.3, `supabase` 2.16.5 e `realtime_client` 2.13.2.
+
+Correzione a quanto scritto qui prima: **un rilascio di patch dell'SDK
+non muove quei due pin.** Dopo la 3.47.7 sono rimasti esattamente dove
+erano. Serve un rilascio minore di Flutter, quindi non è una cosa che si
+sistema aggiornando quando capita.
 
 ### Firebase
 
@@ -394,17 +415,42 @@ sanitari richiede un consenso a parte.
    (`lib/core/supabase.dart`), servizi in `lib/core/*_service.dart`,
    errori normalizzati in `lib/core/app_error.dart` (mai mostrare
    all'utente messaggi SQL o tecnici).
-5. Controllare sempre con `flutter analyze` e `flutter test` prima di
+5. **Gli errori si mostrano in una finestra, le conferme in uno
+   snackbar.** `core/feedback.dart`: `showAppError`, `showErrorDialog`,
+   `runGuarded`. Uno snackbar sparisce da solo dopo qualche secondo e
+   un'operazione fallita passava inosservata — in un'app che registra
+   quello che una persona mangia, credere di avere un diario completo
+   quando non lo è è peggio di un fastidio. Restano scritti dentro la
+   sezione, e non in finestra, soltanto gli errori di *caricamento* di
+   una lista: lì il messaggio è già stabile sullo schermo e una finestra
+   a ogni lista che non carica sarebbe solo d'ostacolo.
+6. Controllare sempre con `flutter analyze` e `flutter test` prima di
    considerare finito. I test stanno in `nutrimind-frontend/test/` e
    servono soprattutto a tenere i modelli allineati agli enum e ai
    vincoli del database.
-6. La CI dei due repository fa questo:
+7. La CI dei due repository fa questo:
    - backend: `node scripts/check-sql.mjs` (parser di PostgreSQL su ogni
      `.sql`) e `node scripts/check-functions.mjs` (esbuild su ogni Edge
-     Function). Si possono eseguire anche a mano.
+     Function). Si possono eseguire anche a mano:
+
+     ```bash
+     npm install --no-save libpg-query@17 && node scripts/check-sql.mjs
+     npm install --no-save esbuild@0.25.0 && node scripts/check-functions.mjs
+     ```
+
+     Due cose da sapere, scoperte il 13 ottobre eseguendoli per la prima
+     volta in locale. I due pacchetti **si scalzano a vicenda** nella
+     stessa cartella `node_modules` (non c'è un `package.json`), quindi
+     vanno installati uno per volta, come fa la CI con due job separati.
+     E fino a quella data **nessuno dei due funzionava**: `check-sql`
+     importava `parseQuery`, che nella 17 si chiama `parse` ed è un
+     modulo CommonJS da importare dal default; e entrambi ricavavano la
+     cartella del repository da `URL.pathname`, che su Windows dà
+     `/C:/...` con gli spazi codificati, così non trovavano nessun file
+     e passavano a vuoto.
    - frontend: `flutter analyze`, `flutter test`, compilazione web con
      `env/dev.example.json`.
-7. **Si può verificare una funzione SQL senza applicarla**: basta
+8. **Si può verificare una funzione SQL senza applicarla**: basta
    riscriverne il corpo come `SELECT` con i parametri come letterali ed
    eseguirlo in sola lettura. È così che si è controllata la 022 prima
    di consegnarla.

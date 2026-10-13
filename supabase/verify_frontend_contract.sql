@@ -231,6 +231,36 @@ checks(kind, name, detail, ok, problem) as (
              where n.nspname = 'public' and p.proname = 'export_my_data'
                and pg_get_functiondef(p.oid) like '%patient_suggestions%'),
     'esportazione incompleta: manca patient_suggestions'
+
+  union all
+
+  -- 027: gli alimenti personali non devono uscire dalle ricerche di
+  -- altri. Il codice a barre è stampato sulle confezioni, quindi non
+  -- serve indovinare nessun identificativo per arrivarci.
+  select 'privacy', 'search_foods', 'nasconde gli alimenti personali di altri',
+    exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = 'search_foods'
+               and pg_get_functiondef(p.oid) like '%f.created_by = (select auth.uid())%'),
+    'la ricerca restituisce anche gli alimenti personali degli altri utenti'
+
+  union all
+
+  select 'privacy', 'get_food_by_barcode', 'nasconde gli alimenti personali di altri',
+    exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = 'get_food_by_barcode'
+               and pg_get_functiondef(p.oid) like '%f.created_by = (select auth.uid())%'),
+    'un alimento personale con codice a barre vero risponde a tutti e copre la voce verificata'
+
+  union all
+
+  -- Nessuna funzione deve essere eseguibile da chi non ha fatto
+  -- l'accesso: sono tutte `security definer`, quindi scavalcano la
+  -- protezione per riga e si difendono da sole.
+  select 'security', 'anon', 'nessuna funzione eseguibile senza accesso',
+    not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public'
+                   and has_function_privilege('anon', p.oid, 'EXECUTE')),
+    'una funzione è raggiungibile senza autenticazione'
 )
 select (select count(*) from checks) as totale,
        (select count(*) from checks where ok) as ok,

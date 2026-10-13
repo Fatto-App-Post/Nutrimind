@@ -41,3 +41,7 @@ supabase/firebase-service-account.json
 # Configurazione locale di Claude Code
 .claude/
 .mcp.json
+
+# dipendenze dei controlli CI, installate con --no-save
+node_modules/
+package-lock.json
